@@ -2,6 +2,7 @@
 qwen-trained-model/
 qwen-elenora-final/
 out/
+checkpoints/
 
 # Eğitim verileri
 train.jsonl
