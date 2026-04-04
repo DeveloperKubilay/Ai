@@ -1,0 +1,20 @@
+{
+  "url": "https://registry.npmjs.org/elenora",
+  "model": {
+    "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "output_dir": "./qwen-trained-model"
+  },
+  "training": {
+    "num_questions": 25,
+    "num_epochs": 30,
+    "learning_rate": 0.001,
+    "batch_size": 2,
+    "lora_r": 16,
+    "lora_alpha": 32
+  },
+  "teacher": {
+    "url": "http://localhost:11434/api/generate",
+    "model": "qwen2.5-coder:7b",
+    "temperature": 0.8
+  }
+}
