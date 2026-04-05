@@ -158,7 +158,5 @@ Sistem, DeepSeek'in kullandığı self-improvement yaklaşımını kullanır:
 ## Gelecek İyileştirmeler
 
 - [ ] Verification step (Teacher cevapları doğrular)
-- [ ] Multi-turn conversation desteği
 - [ ] Farklı model formatları (Llama, Mistral)
-- [ ] Web UI
 - [ ] Otomatik hyperparameter tuning
