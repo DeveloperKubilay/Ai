@@ -1,85 +1,92 @@
-import torch, json, os, shutil
+import torch
+import json
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
-from peft import LoraConfig, get_peft_model, PeftModel
+from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
 
-config = json.load(open("settings.json", "r", encoding="utf-8"))
-checkpoint_dir, output_dir = "./checkpoints", config["model"]["output_dir"]
+# ============================================
+# YAPILANDIRMA
+# ============================================
 
-print("Egitim basliyor...")
+with open("settings.json", "r", encoding="utf-8") as f:
+    config = json.load(f)
 
-# Dataset
-dataset = Dataset.from_list([json.loads(line) for line in open("train.jsonl", "r", encoding="utf-8")])
-n, max_len = len(dataset), max(len(x["text"]) for x in dataset)
+# ============================================
+# EĞİTİM
+# ============================================
 
-# Auto config
-ctx = next(x for x in [512, 1024, 2048, 4096, 8192] if x >= max_len)
-epochs = 10 if n < 100 else 5 if n < 1000 else 3 if n < 10000 else 1
-r = 8 if n < 100 else 16 if n < 10000 else 32
-batch, grad_accum = 2, 8
+print("="*60)
+print("🚀 FINE-TUNING BAŞLIYOR")
+print("="*60)
 
-print(f"Dataset: {n} ornek | ctx:{ctx} | epochs:{epochs} | r:{r} | lr:2e-4\n")
+# 1. Dataset yükle (stream)
+print("📥 train.jsonl yükleniyor...")
+dataset_list = []
+with open("train.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        dataset_list.append(json.loads(line))
 
-# Checkpoint kontrolü
-checkpoints = [d for d in os.listdir(checkpoint_dir) if d.startswith("checkpoint-")] if os.path.exists(checkpoint_dir) else []
-resume = os.path.join(checkpoint_dir, max(checkpoints, key=lambda x: int(x.split("-")[1]))) if checkpoints else None
-if resume: print(f"Devam: {resume}")
+dataset = Dataset.from_list(dataset_list)
+print(f"✅ {len(dataset)} örnek yüklendi")
 
-# Model
+# 2. Model yükle
+print(f"📥 Model: {config['model']['base_model']}")
 tokenizer = AutoTokenizer.from_pretrained(config["model"]["base_model"])
 tokenizer.pad_token = tokenizer.eos_token
-tokenizer.model_max_length = ctx
+
 model = AutoModelForCausalLM.from_pretrained(
-    config["model"]["base_model"], 
-    device_map="auto", 
-    dtype=torch.float16, 
+    config["model"]["base_model"],
+    device_map="auto",
+    torch_dtype=torch.float16,
     trust_remote_code=True
 )
 
-# LoRA
-if resume:
-    model = PeftModel.from_pretrained(model, resume)
-else:
-    lora_config = LoraConfig(
-        r=r, 
-        lora_alpha=r*2, 
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], 
-        lora_dropout=0.05, 
-        bias="none", 
-        task_type="CAUSAL_LM"
-    )
-    model = get_peft_model(model, lora_config)
+# 3. LoRA
+lora_config = LoraConfig(
+    r=config["training"]["lora_r"],
+    lora_alpha=config["training"]["lora_alpha"],
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM"
+)
 
-# Eğitim
+model = get_peft_model(model, lora_config)
+print("✅ LoRA uygulandı")
+
+# 4. Eğitim
+output_dir = config["model"]["output_dir"]
+
 args = TrainingArguments(
-    output_dir=checkpoint_dir, 
-    per_device_train_batch_size=batch, 
-    gradient_accumulation_steps=grad_accum,
-    learning_rate=2e-4, 
-    num_train_epochs=epochs, 
-    fp16=True, 
-    logging_steps=5, 
-    save_strategy="steps", 
-    save_steps=50, 
-    save_total_limit=2, 
-    warmup_ratio=0.1, 
-    optim="adamw_torch", 
+    output_dir=output_dir,
+    per_device_train_batch_size=config["training"]["batch_size"],
+    gradient_accumulation_steps=4,
+    learning_rate=config["training"]["learning_rate"],
+    num_train_epochs=config["training"]["num_epochs"],
+    fp16=True,
+    logging_steps=5,
+    save_strategy="no",  # Sadece sonda kaydet
+    warmup_ratio=0.1,
+    optim="adamw_torch",
     report_to="none"
 )
 
+print(f"🚀 Eğitim başlıyor ({config['training']['num_epochs']} epoch)...\n")
 trainer = SFTTrainer(
-    model=model, 
-    train_dataset=dataset, 
+    model=model,
+    train_dataset=dataset,
     args=args,
     formatting_func=lambda x: x["text"]
 )
 
-try:
-    trainer.train(resume_from_checkpoint=resume)
-    trainer.save_model(output_dir)
-    tokenizer.save_pretrained(output_dir)
-    if os.path.exists(checkpoint_dir): shutil.rmtree(checkpoint_dir)
-    print(f"Tamamlandi: {output_dir}")
-except KeyboardInterrupt:
-    print(f"\nDurduruldu! Devam: python index.py")
+trainer.train()
+
+# 5. Kaydet
+trainer.save_model(output_dir)
+tokenizer.save_pretrained(output_dir)
+
+print("\n" + "="*60)
+print(f"✅ TAMAMLANDI! Model: {output_dir}")
+print("🧪 Test: python quick_test.py")
+print("="*60)
