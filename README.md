@@ -62,14 +62,28 @@ python scripts/tam_egit.py
 
 ## Önemli Not
 
-Şu anki ayarlar ve seed veri sistemi genel bir AI gibi değil, daha çok alan bilgisine dayanan bir bot gibi davranmaya iter.
+Şu anki altyapı genel kullanım için uygundur ama seed veri hâlâ tek alan etrafında döndüğü için model pratikte alan botu gibi davranabilir.
 
 Bunun ana sebebi:
 
-- `data/settings.json` içindeki `system_prompt`
 - `data/data.jsonl` içindeki örneklerin tek alan etrafında dönmesi
+- `data/train.jsonl` ve `data/repair_train.jsonl` içine giren verinin hâlâ aynı konu çevresinde birikmesi
 
-Yani bugün repo olduğu haliyle "genel AI + her konuda doğal cevap" değil, "verilen bilgi alanına sadık cevap" davranışına daha yakındır.
+Yani bugün repo olduğu haliyle "genel AI + her konuda doğal cevap" değil, "tek konu etrafında güçlendirilmiş asistan" davranışına daha yakındır.
+
+## Ayar Haritası
+
+`data/settings.json` içindeki ana bloklar:
+
+- `model`: hangi base model kullanılacak, tokenizer nereden gelecek, sistem promptu ne olacak
+- `training`: epoch, öğrenme oranı, LoRA boyutu ve otomatik profil ayarları
+- `preprocessing`: tokenize edilmiş datasetin nereye yazılacağı ve parça boyutu
+- `checkpointing`: ara kayıtların sıklığı ve saklama politikası
+- `evaluation`: validation split ve early stopping ayarları
+- `inference`: test sırasında üretim ayarları
+- `teacher`: veri üreten yardımcı model ayarları
+- `verification`: teacher çıktısını ikinci kez doğrulama ayarları
+- `redteam`: eğitim sonrası düzeltici test ayarları
 
 ## Temel Dosyalar
 

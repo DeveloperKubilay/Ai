@@ -359,7 +359,7 @@ def main() -> None:
     config = load_config()
     system_prompt = get_system_prompt(config)
     redteam_cfg = config.get("redteam", {})
-    refusal_answer = redteam_cfg.get("refusal_answer", "Bu bilgi verilen Elenora içeriğinde yer almıyor.")
+    refusal_answer = redteam_cfg.get("refusal_answer", "Bu konuda yeterli ve guvenilir bilgiye sahip degilim.")
     train_path = project_path("data", "train.jsonl")
     report_path = project_path("data", "redteam_report.jsonl")
     repair_path = project_path("data", "repair_train.jsonl")

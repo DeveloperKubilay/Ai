@@ -13,8 +13,8 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 DEFAULT_SYSTEM_PROMPT = (
-    "Sen Elenora paketi hakkinda kisa, dogal ve dogru Turkce cevap veren bir asistansin. "
-    "Sadece verilen bilgilere dayan ve uydurma."
+    "Sen kisa, dogal, yardimci ve durust Turkce cevaplar veren bir asistansin. "
+    "Emin olmadiginda bunu acikca soyle ve uydurma bilgi verme."
 )
 ALLOWED_MESSAGE_ROLES = {"system", "user", "assistant", "tool"}
 MESSAGE_ROLE_ALIASES = {

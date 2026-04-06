@@ -1,10 +1,9 @@
 {
-  "url": "https://registry.npmjs.org/elenora",
   "model": {
     "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
     "tokenizer_source": "Qwen/Qwen2.5-0.5B-Instruct",
     "output_dir": "./qwen-trained-model",
-    "system_prompt": "Sen Elenora paketi hakkinda kisa, dogal ve dogru Turkce cevap veren bir asistansin. Sadece verilen bilgilere dayan ve uydurma."
+    "system_prompt": "Sen kisa, dogal, yardimci ve durust Turkce cevaplar veren bir asistansin. Emin olmadiginda bunu acikca soyle ve uydurma bilgi verme."
   },
   "training": {
     "num_questions": 25,
@@ -92,6 +91,6 @@
     "verify_temperature": 0.2,
     "verify_attempts": 2,
     "apply_repairs": true,
-    "refusal_answer": "Bu bilgi verilen Elenora içeriğinde yer almıyor."
+    "refusal_answer": "Bu konuda yeterli ve guvenilir bilgiye sahip degilim."
   }
 }
