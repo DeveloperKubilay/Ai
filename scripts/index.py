@@ -86,11 +86,27 @@ checkpoint_dir = get_checkpoint_dir(config, prepared_paths["run_key"])
 os.makedirs(checkpoint_dir, exist_ok=True)
 latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
 
+try:
+    import torch_xla
+    IS_TPU = True
+    print("TPU destegi algilandi! (bfloat16 kullanilacak)")
+except ImportError:
+    IS_TPU = False
+    print("Standart GPU/CPU modu algilandi! (float16 kullanilacak)")
+
+model_kwargs = {
+    "trust_remote_code": True,
+}
+
+if IS_TPU:
+    model_kwargs["torch_dtype"] = torch.bfloat16
+else:
+    model_kwargs["device_map"] = "auto"
+    model_kwargs["torch_dtype"] = torch.float16
+
 model = AutoModelForCausalLM.from_pretrained(
     resolve_model_reference(config["model"]["base_model"]),
-    device_map="auto",
-    dtype=torch.float16,
-    trust_remote_code=True,
+    **model_kwargs
 )
 model.config.use_cache = False
 
@@ -115,7 +131,8 @@ args = SFTConfig(
     gradient_accumulation_steps=profile["grad_accum"],
     learning_rate=profile["learning_rate"],
     num_train_epochs=profile["epochs"],
-    fp16=True,
+    fp16=not IS_TPU,
+    bf16=IS_TPU,
     logging_steps=logging_steps,
     save_strategy="steps",
     save_steps=save_steps,
