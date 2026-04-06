@@ -1,24 +1,25 @@
-{"text": "<|im_start|>user\nElenora nedir?<|im_end|>\n<|im_start|>assistant\nElenora, Node.js uygulamalarında byte tabanlı döngülü dosya kaydedici bir kütüphanedir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora nasıl kurulum yapılır?<|im_end|>\n<|im_start|>assistant\nnpm install elenora komutu ile kurulur.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, dosya adı nasıl belirlenir?<|im_end|>\n<|im_start|>assistant\nfilename özelliği kullanılarak dosya adı belirlenir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da dosya boyutu nedir?<|im_end|>\n<|im_start|>assistant\nmaxSize özelliği byte cinsinden dosya boyutunu belirler.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, kaç tane yedek dosya tutar?<|im_end|>\n<|im_start|>assistant\nbackupCount özelliği kullanılarak tutulacak yedek dosya sayısı belirlenir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, nasıl bir şekilde konsola entegre edilir?<|im_end|>\n<|im_start|>assistant\nelenora.connect(console, {...}) fonksiyonu ile konsola entegre edilir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da ne tür formatlar destekler?<|im_end|>\n<|im_start|>assistant\nPluggable formatter özelliği sayesinde özel formatlar desteklenir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, farklı log seviyelerini nasıl işleyebilir?<|im_end|>\n<|im_start|>assistant\nLOG, INFO, WARN ve ERROR düzeyinde logları işler.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da dosya rotation ne zaman yapılır?<|im_end|>\n<|im_start|>assistant\nDosya rotation belirlenen boyutlara ulaştığında veya program kapatıldığında yapılır.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, hangi işlemlerde logları güvenli bir şekilde boşaltır?<|im_end|>\n<|im_start|>assistant\nexit, SIGINT ve SIGTERM sinyallerinde logları güvenli bir şekilde boşaltır.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da nasıl bir şekilde eski kayıtları devam ettirebiliriz?<|im_end|>\n<|im_start|>assistant\ncontinueFromLast seçeneği kullanılarak eski kayıtları devam ettirebiliriz.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, ne tür zaman dilimini destekler?<|im_end|>\n<|im_start|>assistant\ntimeZone özelliği kullanılarak belirlenen zaman dilimini destekler.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da nasıl bir şekilde logları özel formatta kaydedebiliriz?<|im_end|>\n<|im_start|>assistant\nFormatter özelliği kullanılarak logları özel formatta kaydedebiliriz.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, ne tür dosya adları oluşturur?<|im_end|>\n<|im_start|>assistant\nlogs/app.log ve Backup_0_app.log, Backup_1_app.log gibi dosya adlarını oluşturur.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da logların ne kadar sık kaydedilir?<|im_end|>\n<|im_start|>assistant\ninterval özelliği kullanılarak belirlenen frekansda logları kaydedilir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, her zaman dosya rotation yapar mı?<|im_end|>\n<|im_start|>assistant\nHayır, maxSize değerine ulaştığında veya program kapatıldığında dosya rotation yapılır.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da hangi log seviyelerini kaydeder?<|im_end|>\n<|im_start|>assistant\nLOG, INFO, WARN ve ERROR düzeyinde logları kaydeder.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, kaç tane dosya tutar?<|im_end|>\n<|im_start|>assistant\n1 + backupCount kadar dosya tutar.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da nasıl bir şekilde logları konsola yazabiliriz?<|im_end|>\n<|im_start|>assistant\nconsole.log, console.info gibi konsol metotlarını kullanarak logları yazabiliriz.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da hangi dosya boyutunu destekler?<|im_end|>\n<|im_start|>assistant\nByte tabanlı dosya boyutunu destekler.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, kaç tane yedek dosya tutar?<|im_end|>\n<|im_start|>assistant\nbackupCount özelliği kullanılarak tutulacak yedek dosya sayısı belirlenir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da ne tür formatlar destekler?<|im_end|>\n<|im_start|>assistant\nPluggable formatter özelliği sayesinde özel formatlar desteklenir.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora, farklı log seviyelerini nasıl işleyebilir?<|im_end|>\n<|im_start|>assistant\nLOG, INFO, WARN ve ERROR düzeyinde logları işler.<|im_end|>"}
-{"text": "<|im_start|>user\nElenora'da dosya rotation ne zaman yapılır?<|im_end|>\n<|im_start|>assistant\nDosya rotation belirlenen boyutlara ulaştığında veya program kapatıldığında yapılır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora nedir?<|im_end|>\n<|im_start|>assistant\nElenora, Node.js için bir byte tabanlı kaydedici loglama aracıdır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora neden kullanılır?<|im_end|>\n<|im_start|>assistant\nElenora, log dosyalarını düzenli olarak döndürme, yedekleme ve kaza-güvenli temizleme sağlar.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'nın temel özellikleri nedir?<|im_end|>\n<|im_start|>assistant\nByte tabanlı rotation, rolling backups, crash-safe flushing ve pluggable formatter özelliklerine sahiptir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora nasıl kurulur?<|im_end|>\n<|im_start|>assistant\nnpm install elenora komutu ile kurulur.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'nın maxSize nedir?<|im_end|>\n<|im_start|>assistant\nmaxSize, dosyanın boyutunu bayt cinsinden belirtir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da nasıl yedekleme yapılır?<|im_end|>\n<|im_start|>assistant\nYedekleme, 'app.log' ve 'Backup_0_app.log', 'Backup_1_app.log' gibi dosyalar şeklinde yapılır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora crash-safe flushing ne anlama gelir?<|im_end|>\n<|im_start|>assistant\nCrash-safe flushing, uygulama kapatıldığında veya SIGINT/SIGTERM sinyali alındığında logları temizlemeyi sağlar.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da nasıl formatter oluşturulur?<|im_end|>\n<|im_start|>assistant\nFormatter, her log girişine özel formatı belirtmek için kullanılabilir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da nasıl console ile entegre edilir?<|im_end|>\n<|im_start|>assistant\nconsole'i elenora ile entegre etmek için elenora.connect fonksiyonu kullanılır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'daki continueFromLast ne anlama gelir?<|im_end|>\n<|im_start|>assistant\ncontinueFromLast, uygulama yeniden başlatıldığında eski logları devam ettirmeyi sağlar.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'un API'sinde connect fonksiyonu nasıl tanımlanır?<|im_end|>\n<|im_start|>assistant\nconnect(output: any, options?: {filename?: string; maxSize?: number; backupCount?: number; interval?: number; timeZone?: string; continueFromLast?: boolean; Formatter?: (entry: LogEntry, dateString: string) => string | Buffer})<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'un API'sinde LogEntry nasıl tanımlanır?<|im_end|>\n<|im_start|>assistant\nLogEntry, level: 'LOG' | 'INFO' | 'WARN' | 'ERROR' şeklinde tanımlanır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da hangi dosya boyutu ayarlanabilir?<|im_end|>\n<|im_start|>assistant\nElenora'da maxSize dosyanın maksimum boyutunu bayt olarak belirleyebilirsiniz.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da kaç tane yedek log oluşturulabilir?<|im_end|>\n<|im_start|>assistant\nbackupCount, uygulamanın aynı anda tutabileceği en fazla yedek dosya sayısını belirtir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'un crash-safe özelliği nasıl çalışır?<|im_end|>\n<|im_start|>assistant\nCrash-safe özelliği, uygulama kapatıldığında veya SIGINT/SIGTERM sinyali alındığında logları kaydetmeyi sağlar.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da formatter ne işe yarar?<|im_end|>\n<|im_start|>assistant\nFormatter, her log girişine özel formatı belirlemek için kullanılabilir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da nasıl console ile entegre edilir?<|im_end|>\n<|im_start|>assistant\nconsole'i elenora ile entegre etmek için elenora.connect fonksiyonu kullanılır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'daki continueFromLast ne anlama gelir?<|im_end|>\n<|im_start|>assistant\ncontinueFromLast, uygulama yeniden başlatıldığında eski logları devam ettirmeyi sağlar.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'un API'sinde connect fonksiyonu nasıl tanımlanır?<|im_end|>\n<|im_start|>assistant\nconnect(output: any, options?: {filename?: string; maxSize?: number; backupCount?: number; interval?: number; timeZone?: string; continueFromLast?: boolean; Formatter?: (entry: LogEntry, dateString: string) => string | Buffer})<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'un API'sinde LogEntry nasıl tanımlanır?<|im_end|>\n<|im_start|>assistant\nLogEntry, level: 'LOG' | 'INFO' | 'WARN' | 'ERROR' şeklinde tanımlanır.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da hangi dosya boyutu ayarlanabilir?<|im_end|>\n<|im_start|>assistant\nElenora'da maxSize dosyanın maksimum boyutunu bayt olarak belirleyebilirsiniz.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da kaç tane yedek log oluşturulabilir?<|im_end|>\n<|im_start|>assistant\nbackupCount, uygulamanın aynı anda tutabileceği en fazla yedek dosya sayısını belirtir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'un crash-safe özelliği nasıl çalışır?<|im_end|>\n<|im_start|>assistant\nCrash-safe özelliği, uygulama kapatıldığında veya SIGINT/SIGTERM sinyali alındığında logları kaydetmeyi sağlar.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da formatter ne işe yarar?<|im_end|>\n<|im_start|>assistant\nFormatter, her log girişine özel formatı belirlemek için kullanılabilir.<|im_end|>"}
+{"text": "<|im_start|>user\nElenora'da nasıl console ile entegre edilir?<|im_end|>\n<|im_start|>assistant\nconsole'i elenora ile entegre etmek için elenora.connect fonksiyonu kullanılır.<|im_end|>"}

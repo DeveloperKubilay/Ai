@@ -2,6 +2,7 @@
   "url": "https://registry.npmjs.org/elenora",
   "model": {
     "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "tokenizer_source": "Qwen/Qwen2.5-0.5B-Instruct",
     "output_dir": "./qwen-trained-model"
   },
   "training": {
@@ -9,8 +10,28 @@
     "num_epochs": 30,
     "learning_rate": 0.001,
     "batch_size": 2,
+    "gradient_accumulation_steps": 4,
     "lora_r": 16,
-    "lora_alpha": 32
+    "lora_alpha": 32,
+    "seed": 42,
+    "auto": {
+      "enabled": true,
+      "reference_examples": 48,
+      "min_epochs": 4,
+      "max_epochs": 60
+    }
+  },
+  "preprocessing": {
+    "prepared_root": "./prepared-datasets",
+    "chunk_size": 64,
+    "max_length_cap": 2048
+  },
+  "checkpointing": {
+    "root_dir": "./checkpoints",
+    "save_steps": 50,
+    "min_save_steps": 1,
+    "save_total_limit": 2,
+    "cleanup_after_success": false
   },
   "teacher": {
     "url": "http://localhost:11434/api/generate",
