@@ -7,7 +7,7 @@ from trl import SFTTrainer
 config = json.load(open("settings.json", "r", encoding="utf-8"))
 checkpoint_dir, output_dir = "./checkpoints", config["model"]["output_dir"]
 
-print("🚀 Eğitim başlıyor...")
+print("Egitim basliyor...")
 
 # Dataset
 dataset = Dataset.from_list([json.loads(line) for line in open("train.jsonl", "r", encoding="utf-8")])
@@ -19,20 +19,21 @@ epochs = 10 if n < 100 else 5 if n < 1000 else 3 if n < 10000 else 1
 r = 8 if n < 100 else 16 if n < 10000 else 32
 batch, grad_accum = 2, 8
 
-print(f"📊 {n} örnek | ctx:{ctx} | epochs:{epochs} | r:{r} | lr:2e-4\n")
+print(f"Dataset: {n} ornek | ctx:{ctx} | epochs:{epochs} | r:{r} | lr:2e-4\n")
 
 # Checkpoint kontrolü
 checkpoints = [d for d in os.listdir(checkpoint_dir) if d.startswith("checkpoint-")] if os.path.exists(checkpoint_dir) else []
 resume = os.path.join(checkpoint_dir, max(checkpoints, key=lambda x: int(x.split("-")[1]))) if checkpoints else None
-if resume: print(f"🔄 Devam: {resume}")
+if resume: print(f"Devam: {resume}")
 
 # Model
 tokenizer = AutoTokenizer.from_pretrained(config["model"]["base_model"])
 tokenizer.pad_token = tokenizer.eos_token
+tokenizer.model_max_length = ctx
 model = AutoModelForCausalLM.from_pretrained(
     config["model"]["base_model"], 
     device_map="auto", 
-    torch_dtype=torch.float16, 
+    dtype=torch.float16, 
     trust_remote_code=True
 )
 
@@ -70,8 +71,7 @@ args = TrainingArguments(
 trainer = SFTTrainer(
     model=model, 
     train_dataset=dataset, 
-    args=args, 
-    max_seq_length=ctx, 
+    args=args,
     formatting_func=lambda x: x["text"]
 )
 
@@ -80,6 +80,6 @@ try:
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
     if os.path.exists(checkpoint_dir): shutil.rmtree(checkpoint_dir)
-    print(f"✅ Tamamlandı: {output_dir}")
+    print(f"Tamamlandi: {output_dir}")
 except KeyboardInterrupt:
-    print(f"\n⚠️ Durduruldu! Devam: python index.py")
+    print(f"\nDurduruldu! Devam: python index.py")
