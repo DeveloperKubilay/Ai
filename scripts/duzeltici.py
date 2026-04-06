@@ -15,7 +15,7 @@ from util.pipeline_utils import (
     project_path,
     stable_json_dumps,
 )
-from teacher_client import call_teacher_json_array, teacher_is_available
+from util.teacher_client import call_teacher_json_array, teacher_is_available
 
 
 WORD_RE = re.compile(r"[A-Za-z0-9_çğıöşüÇĞİÖŞÜ]+", re.UNICODE)

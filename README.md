@@ -8,10 +8,10 @@ Akış sırası şudur:
 
 1. `data/input.jsonl` içinden kaynaklar okunur.
 2. `scripts/create_data.py` eğitim verisini `data/train.jsonl` içine yazar.
-3. `scripts/prepare_dataset.py` bunu tokenize edip `prepared-datasets/` altına hazırlar.
-4. `scripts/index.py` modeli eğitir ve `checkpoints/` altında ara kayıtlar tutar.
-5. `scripts/quick_test.py` hızlı smoke test yapar.
-6. `scripts/redteam_repair.py` modeli zorlayıp hata bulursa `data/repair_train.jsonl` üretir.
+3. `scripts/tokenize.py` bunu tokenize edip `prepared-datasets/` altına hazırlar.
+4. `scripts/egit.py` modeli eğitir ve `checkpoints/` altında ara kayıtlar tutar.
+5. `scripts/test_et.py` hızlı smoke test yapar.
+6. `scripts/duzeltici.py` modeli zorlayıp hata bulursa `data/repair_train.jsonl` üretir.
 
 ## Hızlı Başlangıç
 
@@ -33,31 +33,31 @@ python scripts/create_data.py
 ### 3. Token dataset hazırla
 
 ```bash
-python scripts/prepare_dataset.py
+python scripts/tokenize.py
 ```
 
 ### 4. Eğit
 
 ```bash
-python scripts/index.py
+python scripts/egit.py
 ```
 
 ### 5. Hızlı test
 
 ```bash
-python scripts/quick_test.py
+python scripts/test_et.py
 ```
 
 ### 6. Red-team ve repair
 
 ```bash
-python scripts/redteam_repair.py --apply
+python scripts/duzeltici.py --apply
 ```
 
 ### 7. Tek komutluk akış
 
 ```bash
-python scripts/full_pipeline.py
+python scripts/tam_egit.py
 ```
 
 ## Önemli Not
@@ -79,7 +79,7 @@ Yani bugün repo olduğu haliyle "genel AI + her konuda doğal cevap" değil, "v
 - `data/data.jsonl`: Hazır eğitim örnekleri içeren ana seed veri dosyasıdır. `ai:false` ise buradaki kayıtlar doğrudan kullanılır.
 - `data/train.jsonl`: Eğitime girecek derlenmiş son veri dosyasıdır.
 - `data/settings.json`: Model, eğitim, inference, teacher, verification ve checkpoint ayarlarını tutar.
-- `data/redteam_report.jsonl`: Red-team testinden çıkan rapordur. Model hangi sorularda bozulmuş gösterir.
+- `data/redteam_report.jsonl`: Düzeltici testinden çıkan rapordur. Model hangi sorularda bozulmuş gösterir.
 - `data/repair_train.jsonl`: Red-team sonrası üretilen düzeltme setidir. Yani eğitimden sonra sonradan bulunan tamir örnekleri burada tutulur.
 
 ### docs/
@@ -93,14 +93,14 @@ Yani bugün repo olduğu haliyle "genel AI + her konuda doğal cevap" değil, "v
 ### scripts/
 
 - `scripts/create_data.py`: `input.jsonl` içindeki kaynaklardan `train.jsonl` üretir.
-- `scripts/prepare_dataset.py`: `train.jsonl` verisini tokenize eder ve hazır dataset yazar.
-- `scripts/index.py`: Eğitimi başlatır, checkpoint yönetir ve final adapter'ı kaydeder.
-- `scripts/quick_test.py`: Soruları tek tek ve ayrı ayrı soran hızlı test scriptidir. Mesaj geçmişi taşımaz.
-- `scripts/redteam_repair.py`: Modeli zorlar, rapor çıkarır, gerekiyorsa repair set üretir.
-- `scripts/full_pipeline.py`: Veri üretiminden eğitime kadar ana adımları tek komutta çalıştırır.
+- `scripts/tokenize.py`: `train.jsonl` verisini tokenize eder ve hazır dataset yazar.
+- `scripts/egit.py`: Eğitimi başlatır, checkpoint yönetir ve final adapter'ı kaydeder.
+- `scripts/test_et.py`: Soruları tek tek ve ayrı ayrı soran hızlı test scriptidir. Mesaj geçmişi taşımaz.
+- `scripts/duzeltici.py`: Modeli zorlar, rapor çıkarır, gerekiyorsa repair set üretir.
+- `scripts/tam_egit.py`: Veri üretiminden eğitime kadar ana adımları tek komutta çalıştırır.
 - `scripts/util/pipeline_utils.py`: Ortak yardımcı fonksiyonların toplandığı yerdir. Path çözümü, mesaj normalize etme, runtime tespiti ve profil hesapları burada durur.
-- `scripts/teacher_client.py`: Teacher veya verifier modele HTTP isteği atan küçük istemcidir. JSON array parse etme ve retry mantığı burada bulunur.
-- `scripts/util/model_runtime.py`: Yerel fine-tuned modeli yüklemek ve cevap üretmek için ortak inference katmanıdır. `quick_test.py` ve `redteam_repair.py` aynı yükleme mantığını tekrar yazmasın diye ayrıdır.
+- `scripts/util/teacher_client.py`: Teacher veya verifier modele HTTP isteği atan küçük istemcidir. JSON array parse etme ve retry mantığı burada bulunur.
+- `scripts/util/model_runtime.py`: Yerel fine-tuned modeli yüklemek ve cevap üretmek için ortak inference katmanıdır. `test_et.py` ve `duzeltici.py` aynı yükleme mantığını tekrar yazmasın diye ayrıdır.
 
 ## Sık Karışan Dosyalar
 

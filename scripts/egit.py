@@ -39,7 +39,7 @@ set_seed(seed)
 prepared_paths = get_prepared_paths(config, train_path=project_path("data", "train.jsonl"))
 manifest = read_json(prepared_paths["manifest_path"])
 if manifest is None or not manifest.get("complete") or not os.path.exists(prepared_paths["dataset_dir"]):
-    raise SystemExit("Hazir token dataset bulunamadi. Once: python scripts/prepare_dataset.py")
+    raise SystemExit("Hazir token dataset bulunamadi. Once: python scripts/tokenize.py")
 
 print("=" * 60)
 print("FINE-TUNING BASLIYOR")
@@ -290,7 +290,7 @@ except ValueError as exc:
         raise
 except KeyboardInterrupt:
     print("\nEgitim durduruldu. Son checkpoint ile devam edebilirsin:")
-    print("python scripts/index.py")
+    print("python scripts/egit.py")
     raise
 
 output_dir = resolve_project_path(config["model"]["output_dir"])
@@ -313,5 +313,5 @@ if checkpoint_cfg.get("cleanup_after_success", False) and os.path.exists(checkpo
 
 print("\n" + "=" * 60)
 print(f"TAMAMLANDI! Model: {output_dir}")
-print("Test: python scripts/quick_test.py")
+print("Test: python scripts/test_et.py")
 print("=" * 60)

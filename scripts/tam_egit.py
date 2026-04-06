@@ -28,19 +28,19 @@ def main() -> None:
     repair_path = PROJECT_ROOT / "data" / "repair_train.jsonl"
 
     run_step(["scripts/create_data.py"])
-    run_step(["scripts/prepare_dataset.py"])
-    run_step(["scripts/index.py"])
-    run_step(["scripts/quick_test.py"])
+    run_step(["scripts/tokenize.py"])
+    run_step(["scripts/egit.py"])
+    run_step(["scripts/test_et.py"])
 
     if args.skip_repair:
         return
 
-    run_step(["scripts/redteam_repair.py", "--apply"])
+    run_step(["scripts/duzeltici.py", "--apply"])
     if file_has_content(repair_path):
         print("\n>>> Repair bulundu, retrain dongusu baslatiliyor")
-        run_step(["scripts/prepare_dataset.py"])
-        run_step(["scripts/index.py"])
-        run_step(["scripts/quick_test.py"])
+        run_step(["scripts/tokenize.py"])
+        run_step(["scripts/egit.py"])
+        run_step(["scripts/test_et.py"])
 
 
 if __name__ == "__main__":

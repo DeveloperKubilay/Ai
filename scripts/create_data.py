@@ -13,7 +13,7 @@ from util.pipeline_utils import (
     project_path,
     stable_json_dumps,
 )
-from teacher_client import call_teacher_json_array
+from util.teacher_client import call_teacher_json_array
 
 
 config = load_config()
@@ -257,5 +257,5 @@ print("\n" + "=" * 60)
 print(f"TAMAMLANDI! Toplam {total_written} ornek")
 print("=" * 60)
 print("Siradaki adimlar:")
-print("python scripts/prepare_dataset.py")
-print("python scripts/index.py")
+print("python scripts/tokenize.py")
+print("python scripts/egit.py")
