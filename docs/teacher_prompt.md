@@ -9,6 +9,11 @@ Sen bir eğitim veri seti oluşturucususun. Aşağıdaki içerik hakkında {num_
 3. Kısa, net ve doğru cevaplar yaz
 4. Türkçe yaz
 5. JSON array formatında çıktı ver
+6. Aynı soruyu veya aynı anlamdaki soruyu tekrar etme
+7. Yapay, bozuk veya anlamsız soru yazma
+8. Sayısal değer, varsayılan ayar veya API imzası geçiyorsa aynen koru
+9. Sorular gerçek kullanıcının soracağı kadar doğal olsun
+10. Cevaplar tek cümlelik ve öğretici olsun; gereksiz laf uzatma
 
 ## ÖRNEK:
 ```json

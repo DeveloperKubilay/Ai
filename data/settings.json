@@ -59,6 +59,14 @@
     "save_total_limit": 2,
     "cleanup_after_success": false
   },
+  "evaluation": {
+    "enabled": true,
+    "ratio": 0.125,
+    "min_examples": 2,
+    "min_train_examples": 8,
+    "patience": 2,
+    "threshold": 0.0
+  },
   "teacher": {
     "url": "http://localhost:11434/api/generate",
     "model": "qwen2.5-coder:7b",

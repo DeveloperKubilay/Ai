@@ -2,7 +2,7 @@ import json
 
 import requests
 
-from pipeline_utils import load_config, project_path
+from pipeline_utils import build_chat_text, load_config, project_path
 
 
 config = load_config()
@@ -50,10 +50,7 @@ def process_content(content: str) -> list[dict]:
                 question = qa.get("soru", "")
                 answer = qa.get("cevap", "")
                 if question and answer:
-                    text = (
-                        f"<|im_start|>user\n{question}<|im_end|>\n"
-                        f"<|im_start|>assistant\n{answer}<|im_end|>"
-                    )
+                    text = build_chat_text(question, answer)
                     formatted_data.append({"text": text})
             return formatted_data
         except Exception as exc:

@@ -12,6 +12,10 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+DEFAULT_SYSTEM_PROMPT = (
+    "Sen Elenora paketi hakkinda kisa, dogal ve dogru Turkce cevap veren bir asistansin. "
+    "Sadece verilen bilgilere dayan ve uydurma."
+)
 
 
 def project_path(*parts: str) -> str:
@@ -61,7 +65,7 @@ def build_run_id(config: dict[str, Any], train_path: str | None = None) -> str:
     train_path = resolve_project_path(train_path or project_path("data", "train.jsonl"))
     preprocessing_cfg = config.get("preprocessing", {})
     payload = {
-        "format_version": 1,
+        "format_version": 2,
         "base_model": config["model"]["base_model"],
         "train_sha256": sha256_file(train_path),
         "max_length_cap": preprocessing_cfg.get("max_length_cap"),
@@ -107,6 +111,15 @@ def write_json(path: str, value: Any) -> None:
         json.dump(value, f, ensure_ascii=False, indent=2)
 
 
+def build_chat_text(question: str, answer: str | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> str:
+    parts = [f"<|im_start|>system\n{system_prompt}<|im_end|>", f"<|im_start|>user\n{question}<|im_end|>"]
+    if answer is None:
+        parts.append("<|im_start|>assistant\n")
+    else:
+        parts.append(f"<|im_start|>assistant\n{answer}<|im_end|>")
+    return "\n".join(parts)
+
+
 def detect_runtime() -> dict[str, Any]:
     import torch
 
@@ -124,12 +137,19 @@ def detect_runtime() -> dict[str, Any]:
         pass
 
     if torch.cuda.is_available():
+        device_index = torch.cuda.current_device()
+        props = torch.cuda.get_device_properties(device_index)
         return {
             "name": "cuda",
             "dtype": torch.float16,
             "is_tpu": False,
             "is_cuda": True,
             "is_cpu": False,
+            "device_index": device_index,
+            "device_name": props.name,
+            "total_memory_bytes": int(props.total_memory),
+            "total_memory_gb": round(props.total_memory / (1024**3), 2),
+            "device_count": torch.cuda.device_count(),
         }
 
     return {
@@ -138,6 +158,11 @@ def detect_runtime() -> dict[str, Any]:
         "is_tpu": False,
         "is_cuda": False,
         "is_cpu": True,
+        "device_index": None,
+        "device_name": "cpu",
+        "total_memory_bytes": 0,
+        "total_memory_gb": 0.0,
+        "device_count": 1,
     }
 
 
@@ -279,6 +304,36 @@ def compute_adaptive_min_epochs(sample_count: int, configured_min_epochs: int) -
     return configured_min_epochs
 
 
+def build_eval_split_plan(sample_count: int, evaluation_cfg: dict[str, Any]) -> dict[str, Any]:
+    enabled = evaluation_cfg.get("enabled", True)
+    ratio = float(evaluation_cfg.get("ratio", 0.125))
+    min_eval_examples = max(1, int(evaluation_cfg.get("min_examples", 2)))
+    min_train_examples = max(1, int(evaluation_cfg.get("min_train_examples", 8)))
+    patience = max(1, int(evaluation_cfg.get("patience", 2)))
+    threshold = float(evaluation_cfg.get("threshold", 0.0))
+
+    if not enabled or sample_count < (min_eval_examples + min_train_examples):
+        return {
+            "enabled": False,
+            "eval_examples": 0,
+            "train_examples": sample_count,
+            "patience": patience,
+            "threshold": threshold,
+        }
+
+    eval_examples = max(min_eval_examples, math.ceil(sample_count * ratio))
+    eval_examples = min(eval_examples, sample_count - min_train_examples)
+    eval_examples = max(1, eval_examples)
+
+    return {
+        "enabled": eval_examples > 0,
+        "eval_examples": eval_examples,
+        "train_examples": sample_count - eval_examples,
+        "patience": patience,
+        "threshold": threshold,
+    }
+
+
 def get_runtime_auto_value(
     auto_cfg: dict[str, Any], key: str, runtime_name: str, defaults: dict[str, int | float]
 ) -> int | float:
@@ -293,9 +348,38 @@ def get_runtime_auto_value(
     return defaults["default"]
 
 
+def scale_cuda_capacity_targets(
+    runtime: dict[str, Any],
+    max_batch_size: int,
+    target_device_tokens: int,
+    target_step_tokens: int,
+    max_grad_accum: int,
+) -> tuple[int, int, int, int]:
+    if not runtime.get("is_cuda"):
+        return max_batch_size, target_device_tokens, target_step_tokens, max_grad_accum
+
+    total_memory_gb = float(runtime.get("total_memory_gb", 0.0) or 0.0)
+    if total_memory_gb >= 22:
+        multiplier = 4
+    elif total_memory_gb >= 14:
+        multiplier = 3
+    elif total_memory_gb >= 10:
+        multiplier = 2
+    else:
+        multiplier = 1
+
+    return (
+        max(1, int(math.ceil(max_batch_size * multiplier))),
+        max(1, int(target_device_tokens * multiplier)),
+        max(1, int(target_step_tokens * multiplier)),
+        max(1, int(math.ceil(max_grad_accum * max(1.0, multiplier / 2)))),
+    )
+
+
 def compute_auto_batch_profile(
-    sample_count: int, context_window: int, runtime_name: str, auto_cfg: dict[str, Any]
+    sample_count: int, context_window: int, runtime: dict[str, Any], auto_cfg: dict[str, Any]
 ) -> dict[str, int]:
+    runtime_name = runtime["name"]
     max_batch_defaults = {
         "cpu": 1,
         "cuda": 8,
@@ -337,6 +421,13 @@ def compute_auto_batch_profile(
         1,
         int(get_runtime_auto_value(auto_cfg, "max_grad_accum", runtime_name, max_grad_defaults)),
     )
+    max_batch_size, target_device_tokens, target_step_tokens, max_grad_accum = scale_cuda_capacity_targets(
+        runtime,
+        max_batch_size,
+        target_device_tokens,
+        target_step_tokens,
+        max_grad_accum,
+    )
 
     raw_batch_size = max(1, target_device_tokens // max(1, context_window))
     batch_size = min(max_batch_size, raw_batch_size)
@@ -364,6 +455,30 @@ def compute_padding_multiple(runtime_name: str, auto_cfg: dict[str, Any]) -> int
         "default": 8,
     }
     return max(1, int(get_runtime_auto_value(auto_cfg, "pad_to_multiple_of", runtime_name, defaults)))
+
+
+def min_steps_per_epoch_target(sample_count: int) -> int:
+    if sample_count < 32:
+        return 8
+    if sample_count < 128:
+        return 4
+    return 1
+
+
+def enforce_min_steps_per_epoch(sample_count: int, batch_size: int, grad_accum: int) -> tuple[int, int]:
+    target_steps = min_steps_per_epoch_target(sample_count)
+    current_steps = optimizer_steps_per_epoch(sample_count, batch_size, grad_accum)
+
+    while current_steps < target_steps:
+        if grad_accum > 1:
+            grad_accum = max(1, grad_accum // 2)
+        elif batch_size > 1:
+            batch_size = max(1, batch_size // 2)
+        else:
+            break
+        current_steps = optimizer_steps_per_epoch(sample_count, batch_size, grad_accum)
+
+    return batch_size, grad_accum
 
 
 def build_training_profile(
@@ -415,9 +530,12 @@ def build_training_profile(
     min_epochs = compute_adaptive_min_epochs(sample_count, configured_min_epochs)
     max_epochs = max(min_epochs, int(auto_cfg.get("max_epochs", max(base_epochs * 2, 60))))
 
-    batch_profile = compute_auto_batch_profile(sample_count, context_window, runtime_name, auto_cfg)
+    batch_profile = compute_auto_batch_profile(sample_count, context_window, runtime or {"name": runtime_name}, auto_cfg)
     batch_size = batch_profile["batch_size"]
     grad_accum = batch_profile["grad_accum"]
+    batch_size, grad_accum = enforce_min_steps_per_epoch(sample_count, batch_size, grad_accum)
+    batch_profile["batch_size"] = batch_size
+    batch_profile["grad_accum"] = grad_accum
 
     if sample_count < 64:
         lr_cap = 2e-4

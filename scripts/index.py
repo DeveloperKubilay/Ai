@@ -3,6 +3,7 @@ import shutil
 
 from pipeline_utils import (
     build_checkpoint_resume_plan,
+    build_eval_split_plan,
     build_training_profile,
     build_compatible_init_kwargs,
     call_with_dtype_fallback,
@@ -23,7 +24,7 @@ from pipeline_utils import (
 
 from datasets import load_from_disk
 from peft import LoraConfig, PeftModel, get_peft_model
-from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
+from transformers import AutoModelForCausalLM, AutoTokenizer, EarlyStoppingCallback, set_seed
 from trl import SFTConfig, SFTTrainer
 
 
@@ -31,6 +32,7 @@ config = load_config()
 training_cfg = config["training"]
 preprocessing_cfg = config.get("preprocessing", {})
 checkpoint_cfg = config.get("checkpointing", {})
+evaluation_cfg = config.get("evaluation", {})
 seed = int(training_cfg.get("seed", 42))
 set_seed(seed)
 
@@ -46,14 +48,9 @@ print(f"Run key: {prepared_paths['run_key']}")
 print(f"Hazir dataset: {prepared_paths['dataset_dir']}")
 
 dataset = load_from_disk(prepared_paths["dataset_dir"])
-sample_count = len(dataset)
-if sample_count == 0:
+raw_sample_count = len(dataset)
+if raw_sample_count == 0:
     raise ValueError("Hazir dataset bos.")
-
-if "length" in dataset.column_names:
-    token_lengths = list(dataset["length"])
-else:
-    token_lengths = [len(input_ids) for input_ids in dataset["input_ids"]]
 
 checkpoint_dir = get_checkpoint_dir(config, prepared_paths["run_key"])
 os.makedirs(checkpoint_dir, exist_ok=True)
@@ -67,13 +64,33 @@ is_cuda = runtime["is_cuda"]
 if is_tpu:
     print("TPU destegi algilandi! (bfloat16 kullanilacak)")
 elif is_cuda:
-    print("CUDA/GPU modu algilandi! (float16 kullanilacak)")
+    print(
+        "CUDA/GPU modu algilandi! "
+        f"({runtime.get('device_name', 'cuda')} | {runtime.get('total_memory_gb', 0):.1f} GB | float16)"
+    )
 else:
     print("CPU modu algilandi! (float32 kullanilacak)")
 
-profile = build_training_profile(sample_count, token_lengths, training_cfg, preprocessing_cfg, runtime=runtime)
+eval_plan = build_eval_split_plan(raw_sample_count, evaluation_cfg)
+has_eval = eval_plan["enabled"]
+
+if has_eval:
+    split_dataset = dataset.train_test_split(test_size=eval_plan["eval_examples"], seed=seed, shuffle=True)
+    train_dataset = split_dataset["train"]
+    eval_dataset = split_dataset["test"]
+else:
+    train_dataset = dataset
+    eval_dataset = None
+
+train_sample_count = len(train_dataset)
+if "length" in train_dataset.column_names:
+    token_lengths = list(train_dataset["length"])
+else:
+    token_lengths = [len(input_ids) for input_ids in train_dataset["input_ids"]]
+
+profile = build_training_profile(train_sample_count, token_lengths, training_cfg, preprocessing_cfg, runtime=runtime)
 avg_tokens = profile["avg_tokens"]
-steps_per_epoch = optimizer_steps_per_epoch(sample_count, profile["batch_size"], profile["grad_accum"])
+steps_per_epoch = optimizer_steps_per_epoch(train_sample_count, profile["batch_size"], profile["grad_accum"])
 total_train_steps = steps_per_epoch * profile["epochs"]
 save_steps = compute_save_steps(total_train_steps, checkpoint_cfg)
 logging_steps = compute_logging_steps(steps_per_epoch)
@@ -98,7 +115,8 @@ print(
 )
 print(
     "Veri: "
-    f"ornek={sample_count} | "
+    f"egitim_ornek={train_sample_count} | "
+    f"eval_ornek={len(eval_dataset) if eval_dataset is not None else 0} | "
     f"ortalama_token={avg_tokens:.1f} | "
     f"max_token={max(token_lengths)} | "
     f"steps_per_epoch={steps_per_epoch} | "
@@ -191,6 +209,21 @@ sft_config_kwargs = build_compatible_init_kwargs(
     label="SFTConfig",
 )
 
+if has_eval:
+    sft_config_kwargs.update(
+        build_compatible_init_kwargs(
+            SFTConfig.__init__,
+            {
+                "eval_strategy": "steps",
+                "eval_steps": save_steps,
+                "load_best_model_at_end": True,
+                "metric_for_best_model": "eval_loss",
+                "greater_is_better": False,
+            },
+            label="SFTConfig",
+        )
+    )
+
 args = SFTConfig(
     **sft_config_kwargs
 )
@@ -207,13 +240,31 @@ print(
     f"save_steps={save_steps} | "
     f"save_total_limit={args.save_total_limit}"
 )
+if has_eval:
+    print(
+        "Eval: "
+        f"every={save_steps} step | "
+        f"patience={eval_plan['patience']} | "
+        f"threshold={eval_plan['threshold']}"
+    )
 print(f"Egitim basliyor (seed={seed})...\n")
+
+callbacks = []
+if has_eval:
+    callbacks.append(
+        EarlyStoppingCallback(
+            early_stopping_patience=eval_plan["patience"],
+            early_stopping_threshold=eval_plan["threshold"],
+        )
+    )
 
 trainer = SFTTrainer(
     model=model,
-    train_dataset=dataset,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
     args=args,
     processing_class=tokenizer,
+    callbacks=callbacks,
 )
 
 
@@ -228,9 +279,11 @@ except ValueError as exc:
         print("\nCheckpoint optimizer state bu profil ile uyusmadi. Adapter agirliklariyla sifirdan optimizer kuruluyor.")
         trainer = SFTTrainer(
             model=model,
-            train_dataset=dataset,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             args=args,
             processing_class=tokenizer,
+            callbacks=callbacks,
         )
         run_training(None)
     else:

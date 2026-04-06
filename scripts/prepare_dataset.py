@@ -35,7 +35,7 @@ def load_existing_hashes(parts_dir: str) -> tuple[set[str], int]:
 
 def create_manifest(config: dict, paths: dict[str, str], train_path: str, tokenizer_source: str) -> dict:
     return {
-        "version": 1,
+        "version": 2,
         "run_id": paths["run_id"],
         "run_key": paths["run_key"],
         "source_path": os.path.abspath(train_path),
@@ -53,7 +53,22 @@ def create_manifest(config: dict, paths: dict[str, str], train_path: str, tokeni
         "prepared_root": os.path.abspath(paths["root_dir"]),
         "dataset_dir": os.path.abspath(paths["dataset_dir"]),
         "base_model": config["model"]["base_model"],
+        "loss_mode": "assistant_only",
     }
+
+
+def split_prompt_and_answer(text: str) -> tuple[str, str]:
+    assistant_marker = "<|im_start|>assistant\n"
+    marker_index = text.rfind(assistant_marker)
+    if marker_index == -1:
+        raise ValueError("assistant bolumu bulunamadi")
+
+    prompt_text = text[: marker_index + len(assistant_marker)]
+    answer_text = text[marker_index + len(assistant_marker) :]
+    if not answer_text.strip():
+        raise ValueError("assistant cevabi bos")
+
+    return prompt_text, answer_text
 
 
 def flush_chunk(parts_dir: str, part_index: int, rows: list[dict]) -> str:
@@ -161,9 +176,15 @@ with open(train_path, "r", encoding="utf-8") as f:
             duplicate_skipped += 1
             continue
 
-        input_ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+        prompt_text, answer_text = split_prompt_and_answer(text)
+        prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
+        answer_ids = tokenizer(answer_text, add_special_tokens=False)["input_ids"]
+        input_ids = prompt_ids + answer_ids
         if eos_token_id is not None and (not input_ids or input_ids[-1] != eos_token_id):
             input_ids.append(eos_token_id)
+            answer_ids.append(eos_token_id)
+
+        labels = [-100] * len(prompt_ids) + answer_ids
 
         token_length = len(input_ids)
         token_length_sum += token_length
@@ -173,6 +194,7 @@ with open(train_path, "r", encoding="utf-8") as f:
         buffer.append(
             {
                 "input_ids": input_ids,
+                "labels": labels,
                 "length": token_length,
                 "text_hash": text_hash,
             }

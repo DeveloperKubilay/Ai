@@ -11,7 +11,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from pipeline_utils import load_config, resolve_model_reference, resolve_project_path
+from pipeline_utils import build_chat_text, load_config, resolve_model_reference, resolve_project_path
 
 
 config = load_config()
@@ -30,10 +30,6 @@ base_model = AutoModelForCausalLM.from_pretrained(
 
 model = PeftModel.from_pretrained(base_model, model_path)
 model.eval()
-model.generation_config.do_sample = False
-model.generation_config.temperature = None
-model.generation_config.top_p = None
-model.generation_config.top_k = None
 
 print("Model yuklendi!\n")
 
@@ -48,7 +44,7 @@ for question in test_questions:
     print(f"Soru: {question}")
     print(f"{'=' * 60}")
 
-    prompt = f"<|im_start|>user\n{question}<|im_end|>\n<|im_start|>assistant\n"
+    prompt = build_chat_text(question, answer=None)
     model_inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
 
     generated_ids = model.generate(
