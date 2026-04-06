@@ -1,10 +1,11 @@
 import json
+import os
 from hashlib import sha1
 from typing import Any
 
 import requests
 
-from pipeline_utils import (
+from util.pipeline_utils import (
     build_single_turn_messages,
     get_system_prompt,
     load_config,
@@ -12,6 +13,7 @@ from pipeline_utils import (
     project_path,
     stable_json_dumps,
 )
+from teacher_client import call_teacher_json_array
 
 
 config = load_config()
@@ -31,60 +33,6 @@ try:
         teacher_verify_prompt = f.read()
 except FileNotFoundError:
     teacher_verify_prompt = ""
-
-
-def extract_json_array(raw_text: str) -> list[Any]:
-    cleaned = str(raw_text or "").strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        cleaned = cleaned.replace("json", "", 1).strip()
-
-    start = cleaned.find("[")
-    end = cleaned.rfind("]") + 1
-    if start == -1 or end <= start:
-        raise ValueError("JSON array bulunamadi")
-
-    payload = cleaned[start:end].replace("\r", " ").strip()
-    data = json.loads(payload)
-    if not isinstance(data, list):
-        raise ValueError("JSON array bekleniyordu")
-    return data
-
-
-def call_teacher_json_array(
-    prompt: str,
-    label: str,
-    model_name: str,
-    temperature: float,
-    max_attempts: int,
-) -> list[Any]:
-    payload = {
-        "model": model_name,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": 4000,
-        },
-    }
-
-    for attempt in range(max_attempts):
-        try:
-            response = requests.post(teacher_cfg["url"], json=payload, timeout=240)
-            response.raise_for_status()
-            result = response.json().get("response", "")
-            data = extract_json_array(result)
-            if not data:
-                raise ValueError("Bos JSON array dondu")
-            return data
-        except Exception as exc:
-            print(f"  {label} hatasi ({attempt + 1}/{max_attempts}): {exc}")
-            if attempt == max_attempts - 1:
-                raise
-            print(f"  {label} tekrar deneniyor...")
-
-    raise ValueError(f"{label} cevap veremedi")
-
 
 def normalize_example_record(raw_example: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(raw_example, dict):
@@ -155,6 +103,7 @@ def generate_examples_from_content(content: str) -> list[dict[str, Any]]:
     )
     print("  Teacher'a gonderiliyor...")
     raw_examples = call_teacher_json_array(
+        url=teacher_cfg["url"],
         prompt=prompt,
         label="Teacher",
         model_name=teacher_cfg["model"],
@@ -181,6 +130,7 @@ def verify_examples(content: str, examples: list[dict[str, Any]]) -> tuple[list[
 
     try:
         raw_examples = call_teacher_json_array(
+            url=teacher_cfg["url"],
             prompt=verify_prompt,
             label="Verifier",
             model_name=verification_cfg.get("model") or teacher_cfg["model"],
@@ -216,6 +166,25 @@ def build_direct_messages(item: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"messages": messages}]
 
 
+def load_file_records(item: dict[str, Any]) -> list[dict[str, Any]]:
+    file_value = str(item.get("file", "")).strip()
+    if not file_value:
+        return []
+
+    file_path = project_path(*file_value.replace("\\", "/").split("/")) if not os.path.isabs(file_value) else file_value
+    records = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            child = json.loads(line)
+            if "ai" not in child and "ai" in item:
+                child["ai"] = item["ai"]
+            records.append(child)
+    return records
+
+
 print("=" * 60)
 print("INPUT.JSONL ISLENIYOR")
 print("=" * 60)
@@ -233,43 +202,53 @@ with open(train_path, "w", encoding="utf-8") as train_file:
                 print("  Gecersiz JSON satiri, atlaniyor")
                 continue
 
-            try:
-                if "messages" in item:
-                    examples = build_direct_messages(item)
-                    verified = True
-                    ai_used = False
-                else:
-                    if item.get("ai") is False:
-                        print("  ai:false ama hazir messages yok; bu kayit atlandi")
-                        continue
-
-                    content = fetch_content(item)
-                    if not content:
-                        print("  Kullanilabilir icerik bulunamadi, atlaniyor")
-                        continue
-
-                    examples = generate_examples_from_content(content)
-                    examples, verified = verify_examples(content, examples)
-                    ai_used = True
-            except Exception as exc:
-                print(f"  Isleme hatasi: {exc}")
-                continue
-
-            written_now = 0
-            for example in examples:
-                record = {
-                    "messages": example["messages"],
-                    "source": "teacher" if ai_used else "input",
-                    "verified": verified if ai_used else True,
-                    "ai_used": ai_used,
-                }
-                record_hash = sha1(stable_json_dumps(record["messages"]).encode("utf-8")).hexdigest()
-                if record_hash in dedupe_hashes:
+            source_items = [item]
+            if "file" in item:
+                try:
+                    source_items = load_file_records(item)
+                    print(f"  Dosyadan {len(source_items)} alt kayit yuklendi")
+                except Exception as exc:
+                    print(f"  Dosya okunamadi: {exc}")
                     continue
 
-                dedupe_hashes.add(record_hash)
-                train_file.write(json.dumps(record, ensure_ascii=False) + "\n")
-                written_now += 1
+            written_now = 0
+            for source_item in source_items:
+                try:
+                    if "messages" in source_item:
+                        examples = build_direct_messages(source_item)
+                        verified = True
+                        ai_used = False
+                    else:
+                        if source_item.get("ai") is False:
+                            print("  ai:false ama hazir messages yok; bu kayit atlandi")
+                            continue
+
+                        content = fetch_content(source_item)
+                        if not content:
+                            print("  Kullanilabilir icerik bulunamadi, atlaniyor")
+                            continue
+
+                        examples = generate_examples_from_content(content)
+                        examples, verified = verify_examples(content, examples)
+                        ai_used = True
+                except Exception as exc:
+                    print(f"  Isleme hatasi: {exc}")
+                    continue
+
+                for example in examples:
+                    record = {
+                        "messages": example["messages"],
+                        "source": "teacher" if ai_used else "input",
+                        "verified": verified if ai_used else True,
+                        "ai_used": ai_used,
+                    }
+                    record_hash = sha1(stable_json_dumps(record["messages"]).encode("utf-8")).hexdigest()
+                    if record_hash in dedupe_hashes:
+                        continue
+
+                    dedupe_hashes.add(record_hash)
+                    train_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    written_now += 1
 
             total_written += written_now
             print(f"  {written_now} ornek data/train.jsonl'e eklendi")

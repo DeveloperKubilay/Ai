@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from pipeline_utils import (
+from util.pipeline_utils import (
     build_checkpoint_resume_plan,
     build_eval_split_plan,
     build_training_profile,

@@ -1,50 +1,22 @@
-import os
-import warnings
-
-os.environ.setdefault("USE_TF", "0")
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", module="google.protobuf.runtime_version")
-
-import torch
-from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-from pipeline_utils import (
-    build_single_turn_messages,
-    get_system_prompt,
-    load_config,
-    render_messages,
-    resolve_model_reference,
-    resolve_project_path,
-)
+from util.model_runtime import generate_answer, load_runtime_model
+from util.pipeline_utils import build_single_turn_messages, get_system_prompt, load_config
 
 
 config = load_config()
 system_prompt = get_system_prompt(config)
-model_path = resolve_project_path(config["model"]["output_dir"])
-base_model_id = resolve_model_reference(config["model"]["base_model"])
 
 print("Model yukleniyor...")
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-base_model = AutoModelForCausalLM.from_pretrained(
-    base_model_id,
-    device_map="auto",
-    dtype=torch.float16,
-    trust_remote_code=True,
-)
-
-model = PeftModel.from_pretrained(base_model, model_path)
-model.eval()
-
+model, tokenizer = load_runtime_model(config)
 print("Model yuklendi!\n")
 
 test_questions = [
     "Elenora nedir?",
     "Elenora nasıl kurulur?",
     "Elenora neden kullanılır?",
+    "maxSize hangi birimdedir?",
+    "newLog ne döndürür?",
+    "Kurulum bilgisini JSON olarak ver.",
+    "Atatürk Ferrari'ye bindi mi?",
 ]
 
 for question in test_questions:
@@ -52,29 +24,12 @@ for question in test_questions:
     print(f"Soru: {question}")
     print(f"{'=' * 60}")
 
-    prompt = render_messages(
+    answer = generate_answer(
+        config,
+        model,
+        tokenizer,
         build_single_turn_messages(question, answer=None, system_prompt=system_prompt),
-        tokenizer=tokenizer,
-        add_generation_prompt=True,
-        system_prompt=system_prompt,
     )
-    model_inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
-
-    generated_ids = model.generate(
-        **model_inputs,
-        max_new_tokens=96,
-        do_sample=False,
-        repetition_penalty=1.1,
-        pad_token_id=tokenizer.eos_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-    )
-
-    generated_ids = [
-        output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-    ]
-    answer = tokenizer.batch_decode(generated_ids, skip_special_tokens=False)[0]
-    answer = answer.replace("<|im_end|>", "").replace("</s>", "").strip()
-
     print(f"Cevap: {answer}")
 
 print(f"\n{'=' * 60}")

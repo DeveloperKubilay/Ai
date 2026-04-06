@@ -4,7 +4,7 @@ import os
 import shutil
 from glob import glob
 
-from pipeline_utils import (
+from util.pipeline_utils import (
     get_prepared_paths,
     get_system_prompt,
     load_config,

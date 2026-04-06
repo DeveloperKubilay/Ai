@@ -147,6 +147,8 @@ def normalize_message(message: dict[str, Any]) -> dict[str, str]:
 
     role = normalize_message_role(message.get("role", message.get("type")))
     content = message.get("content", message.get("response", message.get("text", "")))
+    if isinstance(content, (dict, list)):
+        content = json.dumps(content, ensure_ascii=False, indent=2)
     content = str(content or "").strip()
     if not content:
         raise ValueError("Mesaj icerigi bos olamaz.")
@@ -657,9 +659,9 @@ def compute_padding_multiple(runtime_name: str, auto_cfg: dict[str, Any]) -> int
 
 
 def min_steps_per_epoch_target(sample_count: int) -> int:
-    if sample_count < 32:
+    if sample_count < 64:
         return 8
-    if sample_count < 128:
+    if sample_count < 256:
         return 4
     return 1
 

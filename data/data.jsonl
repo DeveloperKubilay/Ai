@@ -1,0 +1,23 @@
+{"messages":[{"role":"user","content":"Elenora nedir?"},{"role":"assistant","content":"Elenora, Node.js için byte tabanlı rolling file logger paketidir."}]}
+{"messages":[{"role":"user","content":"Elenora ne işe yarar?"},{"role":"assistant","content":"Log dosyalarını boyuta göre döndürmek, yedeklemek ve güvenli biçimde diske yazmak için kullanılır."}]}
+{"messages":[{"role":"user","content":"Elenora neden kullanılır?"},{"role":"assistant","content":"Byte tabanlı rotation, rolling backups ve crash-safe flushing sağladığı için kullanılır."}]}
+{"messages":[{"role":"user","content":"Elenora nasıl kurulur?"},{"role":"assistant","content":"npm install elenora komutu ile kurulur."}]}
+{"messages":[{"role":"user","content":"Elenora'nın temel özellikleri nelerdir?"},{"role":"assistant","content":"Byte tabanlı rotation, rolling backups, crash-safe flushing ve formatter desteği sunar."}]}
+{"messages":[{"role":"user","content":"maxSize neyi belirler?"},{"role":"assistant","content":"maxSize, her log dosyasının azami boyutunu byte cinsinden belirler."}]}
+{"messages":[{"role":"user","content":"maxSize hangi birimdedir?"},{"role":"assistant","content":"maxSize byte cinsindedir."}]}
+{"messages":[{"role":"user","content":"backupCount ne işe yarar?"},{"role":"assistant","content":"backupCount, tutulacak yedek log dosyası sayısını belirler."}]}
+{"messages":[{"role":"user","content":"continueFromLast ne yapar?"},{"role":"assistant","content":"continueFromLast true ise mevcut log dosyasının üstüne devam edilir."}]}
+{"messages":[{"role":"user","content":"newLog ne yapar?"},{"role":"assistant","content":"newLog, bağımsız bir logger nesnesi oluşturur."}]}
+{"messages":[{"role":"user","content":"newLog ne döndürür?"},{"role":"assistant","content":"newLog, log, info, warn ve error metodları olan bir logger nesnesi döndürür."}]}
+{"messages":[{"role":"user","content":"Console entegrasyonu nasıl yapılır?"},{"role":"assistant","content":"elenora.connect(console, options) çağrısı ile console entegre edilir."}]}
+{"messages":[{"role":"user","content":"Elenora nedir?"},{"role":"assistant","content":"Elenora, Node.js için byte tabanlı rolling file logger paketidir."},{"role":"user","content":"Nasıl kurulur?"},{"role":"assistant","content":"npm install elenora komutu ile kurulur."}]}
+{"messages":[{"role":"user","content":"maxSize neyi belirler?"},{"role":"assistant","content":"maxSize, her log dosyasının azami boyutunu byte cinsinden belirler."},{"role":"user","content":"Birimi nedir?"},{"role":"assistant","content":"Byte cinsindedir."}]}
+{"messages":[{"role":"user","content":"newLog ne yapar?"},{"role":"assistant","content":"newLog, bağımsız bir logger nesnesi oluşturur."},{"role":"user","content":"Hangi metodları olur?"},{"role":"assistant","content":"log, info, warn ve error metodları olan bir logger döndürür."}]}
+{"messages":[{"role":"user","content":"Kurulum bilgisini JSON olarak ver."},{"role":"assistant","content":{"package":"elenora","install":"npm install elenora"}}]}
+{"messages":[{"role":"user","content":"Kurulum bilgisini JSON formatında döndür."},{"role":"assistant","content":{"package":"elenora","install_command":"npm install elenora"}}]}
+{"messages":[{"role":"user","content":"Elenora kurulumunu JSON olarak özetle."},{"role":"assistant","content":{"name":"elenora","install":"npm install elenora","runtime":"Node.js"}}]}
+{"messages":[{"role":"user","content":"Rotation ayarlarını JSON olarak özetle."},{"role":"assistant","content":{"maxSize_unit":"byte","backupCount":"tutulacak yedek log dosyasi sayisi","continueFromLast":"true ise mevcut dosyanin ustune devam eder"}}]}
+{"messages":[{"role":"user","content":"Kurulum için tool çağrısı JSON üret."},{"role":"assistant","content":{"tool":"npm_install","arguments":{"package":"elenora"}}}]}
+{"messages":[{"role":"user","content":"Console entegrasyonunu JSON olarak ver."},{"role":"assistant","content":{"call":"elenora.connect","target":"console","arguments":"options"}}]}
+{"messages":[{"role":"user","content":"Elenora formatter desteği sunar mı?"},{"role":"assistant","content":"Evet, formatter desteği sunar."}]}
+{"messages":[{"role":"user","content":"Crash-safe flushing ne sağlar?"},{"role":"assistant","content":"Logların güvenli biçimde diske yazılmasına yardımcı olur."}]}

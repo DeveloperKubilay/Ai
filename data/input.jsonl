@@ -1,4 +1,1 @@
-{"url": "https://raw.githubusercontent.com/DeveloperKubilay/elenora/refs/heads/main/README.md"}
-{"messages": [{ "type": "user", "response": "What is the capital of France?" }, { "type": "assistant", "response": "The capital of France is Paris." }]}
-{"messages": [{ "type": "user", "response": "What is the capital of France?" }, { "type": "assistant", "response": "The capital of France is Paris." }], "ai": false}
-{"text": "Nodejs'in son versiyonu aslında 30.0.2 versiyonudur"}
+{"file": "data/data.jsonl", "ai": false}
