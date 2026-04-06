@@ -11,12 +11,12 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from pipeline_utils import load_config
+from pipeline_utils import load_config, resolve_model_reference, resolve_project_path
 
 
 config = load_config()
-model_path = config["model"]["output_dir"]
-base_model_id = config["model"]["base_model"]
+model_path = resolve_project_path(config["model"]["output_dir"])
+base_model_id = resolve_model_reference(config["model"]["base_model"])
 
 print("Model yukleniyor...")
 tokenizer = AutoTokenizer.from_pretrained(model_path)

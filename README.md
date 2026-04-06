@@ -1,96 +1,67 @@
 # Otomatik Fine-Tuning Sistemi
 
-Herhangi bir veri kaynağından (URL, text) otomatik olarak soru-cevap üretip, küçük dil modellerini (Qwen) fine-tune eden sistem.
-
-## Özellikler
-
-- 🤖 Teacher model ile otomatik soru-cevap üretimi
-- 📦 Stream işleme (10GB+ veri destekler)
-- ⚡ LoRA ile hızlı eğitim
-- 🎯 Modüler ve temiz kod yapısı
-- 🔧 Kolay yapılandırma (settings.json)
-
-## Kurulum
-
-```bash
-pip install torch transformers datasets peft trl requests
-```
+Herhangi bir veri kaynağından soru-cevap üretip Qwen tabanlı küçük modelleri fine-tune eden düzenli proje yapısı.
 
 ## Hızlı Başlangıç
 
-### 1. Ollama'yı Başlat
-```bash
-ollama run qwen2.5-coder:7b
-```
+### 1. Veri gir
+`data/input.jsonl` dosyasına URL veya text ekle:
 
-### 2. Veri Hazırla
-`input.jsonl` dosyasına URL veya text ekle:
 ```json
 {"url": "https://registry.npmjs.org/elenora"}
 {"text": "Uzun bir metin..."}
 ```
 
-### 3. Soru-Cevap Üret
+### 2. Soru-cevap üret
 ```bash
-python create_data.py
+python scripts/create_data.py
 ```
 
-### 4. Modeli Eğit
+### 3. Token dataset hazırla
 ```bash
-python index.py
+python scripts/prepare_dataset.py
 ```
 
-### 5. Test Et
+### 4. Eğit
 ```bash
-python quick_test.py
+python scripts/index.py
+```
+
+### 5. Test et
+```bash
+python scripts/quick_test.py
 ```
 
 ## Yapılandırma
 
-`settings.json` dosyasını düzenle:
+Ana ayarlar `data/settings.json` içindedir.
 
-```json
-{
-  "model": {
-    "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
-    "output_dir": "./qwen-trained-model"
-  },
-  "training": {
-    "num_questions": 25,
-    "num_epochs": 30,
-    "learning_rate": 0.001
-  },
-  "teacher": {
-    "model": "qwen2.5-coder:7b",
-    "temperature": 0.8
-  }
-}
+## Klasör Yapısı
+
+```text
+data/
+  input.jsonl
+  settings.json
+  train.jsonl
+docs/
+  amacımız.md
+  teacher_prompt.md
+  test.md
+scripts/
+  create_data.py
+  prepare_dataset.py
+  index.py
+  quick_test.py
+  pipeline_utils.py
+qwen-trained-model/
+checkpoints/
+prepared-datasets/
 ```
 
-## Dosya Yapısı
+## Notlar
 
-```
-├── input.jsonl           # Veri girişi
-├── train.jsonl           # Üretilen eğitim verisi
-├── settings.json         # Yapılandırma
-├── teacher_prompt.md     # Teacher prompt
-├── create_data.py        # Veri üretimi
-├── index.py              # Model eğitimi
-├── quick_test.py         # Test
-└── qwen-trained-model/   # Eğitilmiş model
-```
+- `prepared-datasets/` tokenize edilmiş ara veriyi tutar.
+- `checkpoints/` eğitim sırasında resume için kullanılır.
+- `qwen-trained-model/` final adapter çıktısıdır.
 
-## Gereksinimler
-
-- Python 3.8+
-- CUDA destekli GPU (önerilir)
-- Ollama (Teacher model için)
-- ~8GB RAM (0.5B model için)
-
-## Detaylı Dokümantasyon
-
-Daha fazla bilgi için [amacımız.md](amacımız.md) dosyasına bakın.
-
-## Lisans
-
-MIT
+Daha detaylı açıklama için [docs/amacımız.md](./docs/amacımız.md) dosyasına bak.

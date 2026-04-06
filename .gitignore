@@ -6,8 +6,8 @@ checkpoints/
 prepared-datasets/
 
 # Eğitim verileri
-train.jsonl
-train_formatted.jsonl
+data/train.jsonl
+data/train_formatted.jsonl
 
 # Python
 __pycache__/
@@ -33,5 +33,4 @@ dist/
 .DS_Store
 Thumbs.db
 
-
-test.md
+docs/test.md

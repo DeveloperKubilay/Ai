@@ -10,7 +10,10 @@ from pipeline_utils import (
     get_prepared_paths,
     load_config,
     optimizer_steps_per_epoch,
+    project_path,
     read_json,
+    resolve_model_reference,
+    resolve_project_path,
     write_json,
 )
 
@@ -28,10 +31,10 @@ checkpoint_cfg = config.get("checkpointing", {})
 seed = int(training_cfg.get("seed", 42))
 set_seed(seed)
 
-prepared_paths = get_prepared_paths(config, train_path="train.jsonl")
+prepared_paths = get_prepared_paths(config, train_path=project_path("data", "train.jsonl"))
 manifest = read_json(prepared_paths["manifest_path"])
 if manifest is None or not manifest.get("complete") or not os.path.exists(prepared_paths["dataset_dir"]):
-    raise SystemExit("Hazir token dataset bulunamadi. Once: python prepare_dataset.py")
+    raise SystemExit("Hazir token dataset bulunamadi. Once: python scripts/prepare_dataset.py")
 
 print("=" * 60)
 print("FINE-TUNING BASLIYOR")
@@ -55,7 +58,7 @@ steps_per_epoch = optimizer_steps_per_epoch(sample_count, profile["batch_size"],
 save_steps = compute_save_steps(steps_per_epoch, checkpoint_cfg)
 logging_steps = compute_logging_steps(steps_per_epoch)
 
-tokenizer_source = config["model"].get("tokenizer_source", config["model"]["base_model"])
+tokenizer_source = resolve_model_reference(config["model"].get("tokenizer_source", config["model"]["base_model"]))
 tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
@@ -84,7 +87,7 @@ os.makedirs(checkpoint_dir, exist_ok=True)
 latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
 
 model = AutoModelForCausalLM.from_pretrained(
-    config["model"]["base_model"],
+    resolve_model_reference(config["model"]["base_model"]),
     device_map="auto",
     dtype=torch.float16,
     trust_remote_code=True,
@@ -147,10 +150,10 @@ try:
     trainer.train(resume_from_checkpoint=latest_checkpoint)
 except KeyboardInterrupt:
     print("\nEgitim durduruldu. Son checkpoint ile devam edebilirsin:")
-    print("python index.py")
+    print("python scripts/index.py")
     raise
 
-output_dir = config["model"]["output_dir"]
+output_dir = resolve_project_path(config["model"]["output_dir"])
 trainer.save_model(output_dir)
 tokenizer.save_pretrained(output_dir)
 
@@ -170,5 +173,5 @@ if checkpoint_cfg.get("cleanup_after_success", False) and os.path.exists(checkpo
 
 print("\n" + "=" * 60)
 print(f"TAMAMLANDI! Model: {output_dir}")
-print("Test: python quick_test.py")
+print("Test: python scripts/quick_test.py")
 print("=" * 60)

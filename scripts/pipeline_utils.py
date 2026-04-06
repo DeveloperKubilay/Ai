@@ -2,21 +2,51 @@ import hashlib
 import json
 import math
 import os
+from pathlib import Path
 from typing import Any
 
 
 os.environ.setdefault("USE_TF", "0")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 
-def load_config(path: str = "settings.json") -> dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
+
+def project_path(*parts: str) -> str:
+    return str(PROJECT_ROOT.joinpath(*parts))
+
+
+def resolve_project_path(path_value: str | Path) -> str:
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+    return str((PROJECT_ROOT / path).resolve())
+
+
+def resolve_model_reference(path_or_id: str) -> str:
+    candidate = Path(path_or_id)
+    if candidate.is_absolute():
+        return str(candidate)
+    if path_or_id.startswith(".") or path_or_id.startswith(".."):
+        return resolve_project_path(path_or_id)
+
+    local_candidate = PROJECT_ROOT / candidate
+    if local_candidate.exists():
+        return str(local_candidate.resolve())
+    return path_or_id
+
+
+def load_config(path: str | None = None) -> dict[str, Any]:
+    config_path = resolve_project_path(path or project_path("data", "settings.json"))
+    with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def sha256_file(path: str) -> str:
+    file_path = resolve_project_path(path)
     hasher = hashlib.sha256()
-    with open(path, "rb") as f:
+    with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
@@ -26,7 +56,8 @@ def stable_json_dumps(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
 
 
-def build_run_id(config: dict[str, Any], train_path: str = "train.jsonl") -> str:
+def build_run_id(config: dict[str, Any], train_path: str | None = None) -> str:
+    train_path = resolve_project_path(train_path or project_path("data", "train.jsonl"))
     preprocessing_cfg = config.get("preprocessing", {})
     payload = {
         "format_version": 1,
@@ -37,10 +68,11 @@ def build_run_id(config: dict[str, Any], train_path: str = "train.jsonl") -> str
     return hashlib.sha256(stable_json_dumps(payload).encode("utf-8")).hexdigest()
 
 
-def get_prepared_paths(config: dict[str, Any], train_path: str = "train.jsonl") -> dict[str, str]:
+def get_prepared_paths(config: dict[str, Any], train_path: str | None = None) -> dict[str, str]:
+    train_path = resolve_project_path(train_path or project_path("data", "train.jsonl"))
     run_id = build_run_id(config, train_path)
     run_key = run_id[:12]
-    prepared_root = config.get("preprocessing", {}).get("prepared_root", "./prepared-datasets")
+    prepared_root = resolve_project_path(config.get("preprocessing", {}).get("prepared_root", "./prepared-datasets"))
     run_dir = os.path.join(prepared_root, run_key)
     return {
         "run_id": run_id,
@@ -50,24 +82,27 @@ def get_prepared_paths(config: dict[str, Any], train_path: str = "train.jsonl") 
         "parts_dir": os.path.join(run_dir, "parts"),
         "manifest_path": os.path.join(run_dir, "manifest.json"),
         "dataset_dir": os.path.join(run_dir, "dataset"),
+        "train_path": train_path,
     }
 
 
 def get_checkpoint_dir(config: dict[str, Any], run_key: str) -> str:
-    checkpoint_root = config.get("checkpointing", {}).get("root_dir", "./checkpoints")
+    checkpoint_root = resolve_project_path(config.get("checkpointing", {}).get("root_dir", "./checkpoints"))
     return os.path.join(checkpoint_root, run_key)
 
 
 def read_json(path: str, default: Any = None) -> Any:
-    if not os.path.exists(path):
+    json_path = resolve_project_path(path)
+    if not os.path.exists(json_path):
         return default
-    with open(path, "r", encoding="utf-8") as f:
+    with open(json_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def write_json(path: str, value: Any) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    json_path = resolve_project_path(path)
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(value, f, ensure_ascii=False, indent=2)
 
 
@@ -102,7 +137,9 @@ def compute_adaptive_min_epochs(sample_count: int, configured_min_epochs: int) -
     return configured_min_epochs
 
 
-def build_training_profile(sample_count: int, token_lengths: list[int], training_cfg: dict[str, Any], preprocessing_cfg: dict[str, Any]) -> dict[str, Any]:
+def build_training_profile(
+    sample_count: int, token_lengths: list[int], training_cfg: dict[str, Any], preprocessing_cfg: dict[str, Any]
+) -> dict[str, Any]:
     auto_cfg = training_cfg.get("auto", {})
     auto_enabled = auto_cfg.get("enabled", True)
 
@@ -182,11 +219,14 @@ def build_training_profile(sample_count: int, token_lengths: list[int], training
 
 
 def find_latest_checkpoint(checkpoint_dir: str) -> str | None:
+    checkpoint_dir = resolve_project_path(checkpoint_dir)
     if not os.path.exists(checkpoint_dir):
         return None
 
     checkpoint_names = [
-        name for name in os.listdir(checkpoint_dir) if name.startswith("checkpoint-") and os.path.isdir(os.path.join(checkpoint_dir, name))
+        name
+        for name in os.listdir(checkpoint_dir)
+        if name.startswith("checkpoint-") and os.path.isdir(os.path.join(checkpoint_dir, name))
     ]
     if not checkpoint_names:
         return None
@@ -196,7 +236,7 @@ def find_latest_checkpoint(checkpoint_dir: str) -> str | None:
 
 
 def compute_save_steps(steps_per_epoch: int, checkpoint_cfg: dict[str, Any]) -> int:
-    requested = int(checkpoint_cfg.get("save_steps", 50))
+    requested = int(checkpoint_cfg.get("save_steps", 500))
     min_save_steps = max(1, int(checkpoint_cfg.get("min_save_steps", 1)))
     return max(min_save_steps, min(requested, steps_per_epoch))
 

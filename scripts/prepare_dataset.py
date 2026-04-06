@@ -4,7 +4,15 @@ import os
 import shutil
 from glob import glob
 
-from pipeline_utils import get_prepared_paths, load_config, read_json, sha256_file, write_json
+from pipeline_utils import (
+    get_prepared_paths,
+    load_config,
+    project_path,
+    read_json,
+    resolve_model_reference,
+    sha256_file,
+    write_json,
+)
 
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -77,9 +85,9 @@ def rebuild_arrow_dataset(parts_dir: str, dataset_dir: str) -> int:
 
 
 config = load_config()
-train_path = "train.jsonl"
+train_path = project_path("data", "train.jsonl")
 preprocessing_cfg = config.get("preprocessing", {})
-tokenizer_source = config["model"].get("tokenizer_source", config["model"]["base_model"])
+tokenizer_source = resolve_model_reference(config["model"].get("tokenizer_source", config["model"]["base_model"]))
 chunk_size = max(1, int(preprocessing_cfg.get("chunk_size", 128)))
 paths = get_prepared_paths(config, train_path=train_path)
 
