@@ -2,6 +2,7 @@ import os
 import shutil
 
 from pipeline_utils import (
+    build_checkpoint_resume_plan,
     build_training_profile,
     build_compatible_init_kwargs,
     call_with_dtype_fallback,
@@ -54,11 +55,27 @@ if "length" in dataset.column_names:
 else:
     token_lengths = [len(input_ids) for input_ids in dataset["input_ids"]]
 
-profile = build_training_profile(sample_count, token_lengths, training_cfg, preprocessing_cfg)
-avg_tokens = sum(token_lengths) / sample_count
+checkpoint_dir = get_checkpoint_dir(config, prepared_paths["run_key"])
+os.makedirs(checkpoint_dir, exist_ok=True)
+latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
+
+runtime = detect_runtime()
+runtime_dtype = runtime["dtype"]
+is_tpu = runtime["is_tpu"]
+is_cuda = runtime["is_cuda"]
+
+if is_tpu:
+    print("TPU destegi algilandi! (bfloat16 kullanilacak)")
+elif is_cuda:
+    print("CUDA/GPU modu algilandi! (float16 kullanilacak)")
+else:
+    print("CPU modu algilandi! (float32 kullanilacak)")
+
+profile = build_training_profile(sample_count, token_lengths, training_cfg, preprocessing_cfg, runtime=runtime)
+avg_tokens = profile["avg_tokens"]
 steps_per_epoch = optimizer_steps_per_epoch(sample_count, profile["batch_size"], profile["grad_accum"])
 total_train_steps = steps_per_epoch * profile["epochs"]
-save_steps = compute_save_steps(steps_per_epoch, checkpoint_cfg)
+save_steps = compute_save_steps(total_train_steps, checkpoint_cfg)
 logging_steps = compute_logging_steps(steps_per_epoch)
 warmup_steps = max(1, int(total_train_steps * 0.1)) if total_train_steps > 0 else 0
 
@@ -74,6 +91,7 @@ print(
     f"ctx={profile['context_window']} | "
     f"batch={profile['batch_size']} | "
     f"grad_accum={profile['grad_accum']} | "
+    f"effective_batch={profile['effective_batch_size']} | "
     f"epochs={profile['epochs']} | "
     f"lr={profile['learning_rate']} | "
     f"lora_r={profile['lora_r']}"
@@ -83,25 +101,18 @@ print(
     f"ornek={sample_count} | "
     f"ortalama_token={avg_tokens:.1f} | "
     f"max_token={max(token_lengths)} | "
-    f"steps_per_epoch={steps_per_epoch}"
+    f"steps_per_epoch={steps_per_epoch} | "
+    f"toplam_step={total_train_steps}"
 )
 
-checkpoint_dir = get_checkpoint_dir(config, prepared_paths["run_key"])
-os.makedirs(checkpoint_dir, exist_ok=True)
-latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
-
-runtime = detect_runtime()
-runtime_name = runtime["name"]
-runtime_dtype = runtime["dtype"]
-is_tpu = runtime["is_tpu"]
-is_cuda = runtime["is_cuda"]
-
-if is_tpu:
-    print("TPU destegi algilandi! (bfloat16 kullanilacak)")
-elif is_cuda:
-    print("CUDA/GPU modu algilandi! (float16 kullanilacak)")
-else:
-    print("CPU modu algilandi! (float32 kullanilacak)")
+resume_plan = build_checkpoint_resume_plan(
+    latest_checkpoint,
+    profile,
+    runtime,
+    save_steps=save_steps,
+    logging_steps=logging_steps,
+)
+resume_checkpoint = latest_checkpoint if resume_plan["resume_trainer_state"] else None
 
 model_kwargs = {
     "trust_remote_code": True,
@@ -119,9 +130,26 @@ model = call_with_dtype_fallback(
 model.config.use_cache = False
 
 if latest_checkpoint:
-    print(f"Checkpointten devam ediliyor: {latest_checkpoint}")
-    model = PeftModel.from_pretrained(model, latest_checkpoint)
-else:
+    if resume_plan["load_adapter"]:
+        model = PeftModel.from_pretrained(model, latest_checkpoint, is_trainable=True)
+        if resume_checkpoint:
+            print(f"Checkpointten tam devam ediliyor: {latest_checkpoint}")
+        else:
+            print(f"Checkpoint bulundu, adapter yukleniyor: {latest_checkpoint}")
+            if resume_plan["reasons"]:
+                print("Optimizer/scheduler sifirdan kurulacak. Sebepler:")
+                for reason in resume_plan["reasons"]:
+                    print(f"- {reason}")
+    else:
+        print(f"Checkpoint bulundu ama mevcut profile uyumsuz, yok sayiliyor: {latest_checkpoint}")
+        if resume_plan["reasons"]:
+            print("Yeni LoRA egitimi baslatilacak. Sebepler:")
+            for reason in resume_plan["reasons"]:
+                print(f"- {reason}")
+        latest_checkpoint = None
+        resume_checkpoint = None
+
+if not latest_checkpoint:
     lora_config = LoraConfig(
         r=profile["lora_r"],
         lora_alpha=profile["lora_alpha"],
@@ -156,6 +184,7 @@ sft_config_kwargs = build_compatible_init_kwargs(
         "max_length": profile["context_window"],
         "shuffle_dataset": True,
         "packing": False,
+        "pad_to_multiple_of": profile["pad_to_multiple_of"],
         "gradient_checkpointing": not is_tpu,
         "dataloader_pin_memory": is_cuda,
     },
@@ -187,8 +216,25 @@ trainer = SFTTrainer(
     processing_class=tokenizer,
 )
 
+
+def run_training(resume_from_checkpoint: str | None):
+    return trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+
+
 try:
-    trainer.train(resume_from_checkpoint=latest_checkpoint)
+    run_training(resume_checkpoint)
+except ValueError as exc:
+    if resume_checkpoint and "parameter group" in str(exc):
+        print("\nCheckpoint optimizer state bu profil ile uyusmadi. Adapter agirliklariyla sifirdan optimizer kuruluyor.")
+        trainer = SFTTrainer(
+            model=model,
+            train_dataset=dataset,
+            args=args,
+            processing_class=tokenizer,
+        )
+        run_training(None)
+    else:
+        raise
 except KeyboardInterrupt:
     print("\nEgitim durduruldu. Son checkpoint ile devam edebilirsin:")
     print("python scripts/index.py")

@@ -18,7 +18,32 @@
       "enabled": true,
       "reference_examples": 48,
       "min_epochs": 4,
-      "max_epochs": 60
+      "max_epochs": 60,
+      "max_batch_size": {
+        "cpu": 1,
+        "cuda": 8,
+        "tpu": 32
+      },
+      "device_batch_tokens": {
+        "cpu": 1024,
+        "cuda": 4096,
+        "tpu": 16384
+      },
+      "effective_step_tokens": {
+        "cpu": 1024,
+        "cuda": 16384,
+        "tpu": 65536
+      },
+      "max_grad_accum": {
+        "cpu": 4,
+        "cuda": 8,
+        "tpu": 16
+      },
+      "pad_to_multiple_of": {
+        "cpu": 8,
+        "cuda": 8,
+        "tpu": 32
+      }
     }
   },
   "preprocessing": {
@@ -30,6 +55,7 @@
     "root_dir": "./checkpoints",
     "save_steps": 500,
     "min_save_steps": 1,
+    "short_run_target_saves": 2,
     "save_total_limit": 2,
     "cleanup_after_success": false
   },

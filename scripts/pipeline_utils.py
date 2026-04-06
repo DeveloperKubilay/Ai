@@ -172,6 +172,82 @@ def build_compatible_init_kwargs(factory: Any, raw_kwargs: dict[str, Any], label
     return compatible_kwargs
 
 
+def safe_torch_load(path: str) -> Any:
+    import torch
+
+    resolved_path = resolve_project_path(path)
+    try:
+        return torch.load(resolved_path, map_location="cpu", weights_only=False)
+    except TypeError:
+        return torch.load(resolved_path, map_location="cpu")
+
+
+def read_checkpoint_training_args(checkpoint_path: str) -> Any:
+    args_path = os.path.join(resolve_project_path(checkpoint_path), "training_args.bin")
+    if not os.path.exists(args_path):
+        return None
+    return safe_torch_load(args_path)
+
+
+def build_checkpoint_resume_plan(
+    checkpoint_path: str | None,
+    profile: dict[str, Any],
+    runtime: dict[str, Any],
+    save_steps: int,
+    logging_steps: int,
+) -> dict[str, Any]:
+    plan = {
+        "checkpoint_path": checkpoint_path,
+        "resume_trainer_state": False,
+        "load_adapter": True,
+        "reasons": [],
+    }
+    if not checkpoint_path:
+        return plan
+
+    checkpoint_path = resolve_project_path(checkpoint_path)
+
+    adapter_config = read_json(os.path.join(checkpoint_path, "adapter_config.json"))
+    if adapter_config is not None:
+        if int(adapter_config.get("r", profile["lora_r"])) != int(profile["lora_r"]):
+            plan["reasons"].append(f"lora_r: {adapter_config.get('r')} -> {profile['lora_r']}")
+        if int(adapter_config.get("lora_alpha", profile["lora_alpha"])) != int(profile["lora_alpha"]):
+            plan["reasons"].append(f"lora_alpha: {adapter_config.get('lora_alpha')} -> {profile['lora_alpha']}")
+        if any(reason.startswith("lora_") for reason in plan["reasons"]):
+            plan["load_adapter"] = False
+
+    saved_args = read_checkpoint_training_args(checkpoint_path)
+    if saved_args is None:
+        plan["reasons"].append("training_args.bin bulunamadi")
+        return plan
+
+    comparisons = {
+        "per_device_train_batch_size": profile["batch_size"],
+        "gradient_accumulation_steps": profile["grad_accum"],
+        "learning_rate": profile["learning_rate"],
+        "save_steps": save_steps,
+        "logging_steps": logging_steps,
+        "fp16": runtime["is_cuda"],
+        "bf16": runtime["is_tpu"],
+    }
+
+    for key, current_value in comparisons.items():
+        if not hasattr(saved_args, key):
+            continue
+
+        saved_value = getattr(saved_args, key)
+        if isinstance(current_value, float):
+            is_same = math.isclose(float(saved_value), float(current_value), rel_tol=1e-9, abs_tol=1e-12)
+        else:
+            is_same = saved_value == current_value
+
+        if not is_same:
+            plan["reasons"].append(f"{key}: {saved_value} -> {current_value}")
+
+    plan["resume_trainer_state"] = not plan["reasons"]
+    return plan
+
+
 def compute_context_window(lengths: list[int], max_length_cap: int | None = None) -> int:
     max_tokens = max(lengths)
     candidates = [256, 512, 1024, 2048, 4096, 8192]
@@ -203,11 +279,103 @@ def compute_adaptive_min_epochs(sample_count: int, configured_min_epochs: int) -
     return configured_min_epochs
 
 
+def get_runtime_auto_value(
+    auto_cfg: dict[str, Any], key: str, runtime_name: str, defaults: dict[str, int | float]
+) -> int | float:
+    value = auto_cfg.get(key)
+    if isinstance(value, dict):
+        if runtime_name in value:
+            return value[runtime_name]
+        if "default" in value:
+            return value["default"]
+    if runtime_name in defaults:
+        return defaults[runtime_name]
+    return defaults["default"]
+
+
+def compute_auto_batch_profile(
+    sample_count: int, context_window: int, runtime_name: str, auto_cfg: dict[str, Any]
+) -> dict[str, int]:
+    max_batch_defaults = {
+        "cpu": 1,
+        "cuda": 8,
+        "tpu": 32,
+        "default": 4,
+    }
+    device_token_defaults = {
+        "cpu": 1024,
+        "cuda": 4096,
+        "tpu": 16384,
+        "default": 2048,
+    }
+    step_token_defaults = {
+        "cpu": 1024,
+        "cuda": 16384,
+        "tpu": 65536,
+        "default": 4096,
+    }
+    max_grad_defaults = {
+        "cpu": 4,
+        "cuda": 8,
+        "tpu": 16,
+        "default": 8,
+    }
+
+    max_batch_size = max(
+        1,
+        int(get_runtime_auto_value(auto_cfg, "max_batch_size", runtime_name, max_batch_defaults)),
+    )
+    target_device_tokens = max(
+        1,
+        int(get_runtime_auto_value(auto_cfg, "device_batch_tokens", runtime_name, device_token_defaults)),
+    )
+    target_step_tokens = max(
+        1,
+        int(get_runtime_auto_value(auto_cfg, "effective_step_tokens", runtime_name, step_token_defaults)),
+    )
+    max_grad_accum = max(
+        1,
+        int(get_runtime_auto_value(auto_cfg, "max_grad_accum", runtime_name, max_grad_defaults)),
+    )
+
+    raw_batch_size = max(1, target_device_tokens // max(1, context_window))
+    batch_size = min(max_batch_size, raw_batch_size)
+    batch_size = min(max(1, sample_count), batch_size)
+
+    micro_batches = max(1, math.ceil(sample_count / batch_size))
+    grad_accum = max(1, math.ceil(target_step_tokens / max(1, batch_size * context_window)))
+    grad_accum = min(grad_accum, max_grad_accum, micro_batches)
+
+    return {
+        "batch_size": batch_size,
+        "grad_accum": grad_accum,
+        "max_batch_size": max_batch_size,
+        "target_device_tokens": target_device_tokens,
+        "target_step_tokens": target_step_tokens,
+        "max_grad_accum": max_grad_accum,
+    }
+
+
+def compute_padding_multiple(runtime_name: str, auto_cfg: dict[str, Any]) -> int:
+    defaults = {
+        "cpu": 8,
+        "cuda": 8,
+        "tpu": 32,
+        "default": 8,
+    }
+    return max(1, int(get_runtime_auto_value(auto_cfg, "pad_to_multiple_of", runtime_name, defaults)))
+
+
 def build_training_profile(
-    sample_count: int, token_lengths: list[int], training_cfg: dict[str, Any], preprocessing_cfg: dict[str, Any]
+    sample_count: int,
+    token_lengths: list[int],
+    training_cfg: dict[str, Any],
+    preprocessing_cfg: dict[str, Any],
+    runtime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     auto_cfg = training_cfg.get("auto", {})
     auto_enabled = auto_cfg.get("enabled", True)
+    runtime_name = (runtime or {}).get("name", "cpu")
 
     base_batch = max(1, int(training_cfg["batch_size"]))
     base_grad_accum = max(1, int(training_cfg.get("gradient_accumulation_steps", 4)))
@@ -216,17 +384,27 @@ def build_training_profile(
     base_r = max(4, int(training_cfg["lora_r"]))
     base_alpha = max(int(training_cfg["lora_alpha"]), base_r * 2)
     max_length_cap = preprocessing_cfg.get("max_length_cap")
+    context_window = compute_context_window(token_lengths, max_length_cap=max_length_cap)
+    avg_tokens = max(1.0, sum(token_lengths) / max(1, sample_count))
+    total_tokens = int(sum(token_lengths))
+    pad_to_multiple_of = compute_padding_multiple(runtime_name, auto_cfg)
 
     profile = {
         "auto_enabled": auto_enabled,
+        "runtime": runtime_name,
         "batch_size": base_batch,
         "grad_accum": base_grad_accum,
+        "effective_batch_size": base_batch * base_grad_accum,
         "epochs": base_epochs,
         "learning_rate": base_lr,
         "lora_r": base_r,
         "lora_alpha": base_alpha,
-        "context_window": compute_context_window(token_lengths, max_length_cap=max_length_cap),
+        "context_window": context_window,
+        "avg_tokens": avg_tokens,
+        "total_tokens": total_tokens,
+        "pad_to_multiple_of": pad_to_multiple_of,
         "target_updates": optimizer_steps_per_epoch(sample_count, base_batch, base_grad_accum) * base_epochs,
+        "target_examples": sample_count * base_epochs,
     }
 
     if not auto_enabled:
@@ -237,16 +415,9 @@ def build_training_profile(
     min_epochs = compute_adaptive_min_epochs(sample_count, configured_min_epochs)
     max_epochs = max(min_epochs, int(auto_cfg.get("max_epochs", max(base_epochs * 2, 60))))
 
-    if sample_count < 32:
-        grad_accum = 1
-    elif sample_count < 128:
-        grad_accum = 2
-    elif sample_count < 512:
-        grad_accum = 4
-    elif sample_count < 4096:
-        grad_accum = 8
-    else:
-        grad_accum = 16
+    batch_profile = compute_auto_batch_profile(sample_count, context_window, runtime_name, auto_cfg)
+    batch_size = batch_profile["batch_size"]
+    grad_accum = batch_profile["grad_accum"]
 
     if sample_count < 64:
         lr_cap = 2e-4
@@ -266,19 +437,22 @@ def build_training_profile(
 
     reference_updates = optimizer_steps_per_epoch(reference_examples, base_batch, base_grad_accum) * base_epochs
     target_updates = max(40, reference_updates)
-    steps_per_epoch = optimizer_steps_per_epoch(sample_count, base_batch, grad_accum)
-    epochs = math.ceil(target_updates / steps_per_epoch)
+    target_examples = max(sample_count, target_updates * base_batch)
+    epochs = math.ceil(target_examples / max(1, sample_count))
     epochs = max(min_epochs, min(max_epochs, epochs))
 
     profile.update(
         {
-            "batch_size": base_batch,
+            "batch_size": batch_size,
             "grad_accum": grad_accum,
+            "effective_batch_size": batch_size * grad_accum,
             "epochs": epochs,
             "learning_rate": min(base_lr, lr_cap),
             "lora_r": lora_r,
             "lora_alpha": max(base_alpha, lora_r * 2),
             "target_updates": target_updates,
+            "target_examples": target_examples,
+            "batch_profile": batch_profile,
         }
     )
     return profile
@@ -301,10 +475,18 @@ def find_latest_checkpoint(checkpoint_dir: str) -> str | None:
     return os.path.join(checkpoint_dir, latest_name)
 
 
-def compute_save_steps(steps_per_epoch: int, checkpoint_cfg: dict[str, Any]) -> int:
+def compute_save_steps(total_train_steps: int, checkpoint_cfg: dict[str, Any]) -> int:
     requested = int(checkpoint_cfg.get("save_steps", 500))
     min_save_steps = max(1, int(checkpoint_cfg.get("min_save_steps", 1)))
-    return max(min_save_steps, min(requested, steps_per_epoch))
+    short_run_target_saves = max(1, int(checkpoint_cfg.get("short_run_target_saves", 2)))
+
+    if total_train_steps <= 0:
+        return max(min_save_steps, requested)
+
+    if total_train_steps < requested:
+        return max(min_save_steps, math.ceil(total_train_steps / short_run_target_saves))
+
+    return max(min_save_steps, requested)
 
 
 def compute_logging_steps(steps_per_epoch: int) -> int:
