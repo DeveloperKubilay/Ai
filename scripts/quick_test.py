@@ -11,10 +11,18 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from pipeline_utils import build_chat_text, load_config, resolve_model_reference, resolve_project_path
+from pipeline_utils import (
+    build_single_turn_messages,
+    get_system_prompt,
+    load_config,
+    render_messages,
+    resolve_model_reference,
+    resolve_project_path,
+)
 
 
 config = load_config()
+system_prompt = get_system_prompt(config)
 model_path = resolve_project_path(config["model"]["output_dir"])
 base_model_id = resolve_model_reference(config["model"]["base_model"])
 
@@ -44,7 +52,12 @@ for question in test_questions:
     print(f"Soru: {question}")
     print(f"{'=' * 60}")
 
-    prompt = build_chat_text(question, answer=None)
+    prompt = render_messages(
+        build_single_turn_messages(question, answer=None, system_prompt=system_prompt),
+        tokenizer=tokenizer,
+        add_generation_prompt=True,
+        system_prompt=system_prompt,
+    )
     model_inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
 
     generated_ids = model.generate(
@@ -60,7 +73,7 @@ for question in test_questions:
         output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
     ]
     answer = tokenizer.batch_decode(generated_ids, skip_special_tokens=False)[0]
-    answer = answer.replace("<|im_end|>", "").strip()
+    answer = answer.replace("<|im_end|>", "").replace("</s>", "").strip()
 
     print(f"Cevap: {answer}")
 

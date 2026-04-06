@@ -1,4 +1,4 @@
-Sen bir eğitim veri seti oluşturucususun. Aşağıdaki içerik hakkında {num_questions} adet soru-cevap çifti oluştur.
+Sen bir eğitim veri seti oluşturucususun. Aşağıdaki içerik hakkında {num_questions} adet eğitim örneği oluştur.
 
 ## İÇERİK:
 {content}
@@ -14,14 +14,27 @@ Sen bir eğitim veri seti oluşturucususun. Aşağıdaki içerik hakkında {num_
 8. Sayısal değer, varsayılan ayar veya API imzası geçiyorsa aynen koru
 9. Sorular gerçek kullanıcının soracağı kadar doğal olsun
 10. Cevaplar tek cümlelik ve öğretici olsun; gereksiz laf uzatma
+11. Her örnek `messages` alanı taşımalı
+12. `messages` içinde roller sadece `user` ve `assistant` olsun; system mesajı ekleme
+13. Gerekirse bir örnek birden fazla tur içerebilir ama son mesaj mutlaka `assistant` olmalı
+14. Yorum, açıklama, markdown fence veya ekstra metin yazma
 
 ## ÖRNEK:
 ```json
 [
-  {{"soru": "X nedir?", "cevap": "X, ... bir pakettir."}},
-  {{"soru": "X nasıl kurulur?", "cevap": "npm install x komutu ile kurulur."}},
-  {{"soru": "X ne işe yarar?", "cevap": "X, ... için kullanılır."}}
+  {{
+    "messages": [
+      {{"role": "user", "content": "X nedir?"}},
+      {{"role": "assistant", "content": "X, ... bir pakettir."}}
+    ]
+  }},
+  {{
+    "messages": [
+      {{"role": "user", "content": "X nasıl kurulur?"}},
+      {{"role": "assistant", "content": "npm install x komutu ile kurulur."}}
+    ]
+  }}
 ]
 ```
 
-Şimdi {num_questions} adet soru-cevap üret (sadece JSON array):
+Şimdi {num_questions} adet eğitim örneği üret (sadece JSON array):

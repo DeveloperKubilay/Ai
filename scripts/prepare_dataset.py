@@ -6,11 +6,15 @@ from glob import glob
 
 from pipeline_utils import (
     get_prepared_paths,
+    get_system_prompt,
     load_config,
+    normalize_messages,
     project_path,
     read_json,
     resolve_model_reference,
     sha256_file,
+    stable_json_dumps,
+    tokenize_messages_for_training,
     write_json,
 )
 
@@ -35,7 +39,7 @@ def load_existing_hashes(parts_dir: str) -> tuple[set[str], int]:
 
 def create_manifest(config: dict, paths: dict[str, str], train_path: str, tokenizer_source: str) -> dict:
     return {
-        "version": 2,
+        "version": 3,
         "run_id": paths["run_id"],
         "run_key": paths["run_key"],
         "source_path": os.path.abspath(train_path),
@@ -53,7 +57,7 @@ def create_manifest(config: dict, paths: dict[str, str], train_path: str, tokeni
         "prepared_root": os.path.abspath(paths["root_dir"]),
         "dataset_dir": os.path.abspath(paths["dataset_dir"]),
         "base_model": config["model"]["base_model"],
-        "loss_mode": "assistant_only",
+        "loss_mode": "assistant_only_multi_turn",
     }
 
 
@@ -103,6 +107,7 @@ config = load_config()
 train_path = project_path("data", "train.jsonl")
 preprocessing_cfg = config.get("preprocessing", {})
 tokenizer_source = resolve_model_reference(config["model"].get("tokenizer_source", config["model"]["base_model"]))
+system_prompt = get_system_prompt(config)
 chunk_size = max(1, int(preprocessing_cfg.get("chunk_size", 128)))
 paths = get_prepared_paths(config, train_path=train_path)
 
@@ -166,25 +171,47 @@ with open(train_path, "r", encoding="utf-8") as f:
             invalid_skipped += 1
             continue
 
-        text = item.get("text", "").strip()
-        if not text:
-            empty_skipped += 1
+        try:
+            if "messages" in item:
+                messages = normalize_messages(
+                    item.get("messages", []),
+                    system_prompt=system_prompt,
+                    require_assistant=True,
+                    require_final_assistant=True,
+                )
+                dedupe_source = stable_json_dumps({"messages": messages})
+                encoded = tokenize_messages_for_training(
+                    messages,
+                    tokenizer,
+                    eos_token_id=eos_token_id,
+                    system_prompt=system_prompt,
+                )
+                input_ids = encoded["input_ids"]
+                labels = encoded["labels"]
+            else:
+                text = item.get("text", "").strip()
+                if not text:
+                    empty_skipped += 1
+                    continue
+
+                dedupe_source = text
+                prompt_text, answer_text = split_prompt_and_answer(text)
+                prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
+                answer_ids = tokenizer(answer_text, add_special_tokens=False)["input_ids"]
+                input_ids = prompt_ids + answer_ids
+                if eos_token_id is not None and (not input_ids or input_ids[-1] != eos_token_id):
+                    input_ids.append(eos_token_id)
+                    answer_ids.append(eos_token_id)
+
+                labels = [-100] * len(prompt_ids) + answer_ids
+        except ValueError:
+            invalid_skipped += 1
             continue
 
-        text_hash = hashlib.sha1(text.encode("utf-8")).hexdigest()
+        text_hash = hashlib.sha1(dedupe_source.encode("utf-8")).hexdigest()
         if text_hash in seen_hashes:
             duplicate_skipped += 1
             continue
-
-        prompt_text, answer_text = split_prompt_and_answer(text)
-        prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
-        answer_ids = tokenizer(answer_text, add_special_tokens=False)["input_ids"]
-        input_ids = prompt_ids + answer_ids
-        if eos_token_id is not None and (not input_ids or input_ids[-1] != eos_token_id):
-            input_ids.append(eos_token_id)
-            answer_ids.append(eos_token_id)
-
-        labels = [-100] * len(prompt_ids) + answer_ids
 
         token_length = len(input_ids)
         token_length_sum += token_length

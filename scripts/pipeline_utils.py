@@ -16,6 +16,18 @@ DEFAULT_SYSTEM_PROMPT = (
     "Sen Elenora paketi hakkinda kisa, dogal ve dogru Turkce cevap veren bir asistansin. "
     "Sadece verilen bilgilere dayan ve uydurma."
 )
+ALLOWED_MESSAGE_ROLES = {"system", "user", "assistant", "tool"}
+MESSAGE_ROLE_ALIASES = {
+    "system": "system",
+    "developer": "system",
+    "user": "user",
+    "human": "user",
+    "assistant": "assistant",
+    "model": "assistant",
+    "ai": "assistant",
+    "tool": "tool",
+    "function": "tool",
+}
 
 
 def project_path(*parts: str) -> str:
@@ -57,7 +69,7 @@ def sha256_file(path: str) -> str:
     return hasher.hexdigest()
 
 
-def stable_json_dumps(value: dict[str, Any]) -> str:
+def stable_json_dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
 
 
@@ -65,7 +77,7 @@ def build_run_id(config: dict[str, Any], train_path: str | None = None) -> str:
     train_path = resolve_project_path(train_path or project_path("data", "train.jsonl"))
     preprocessing_cfg = config.get("preprocessing", {})
     payload = {
-        "format_version": 2,
+        "format_version": 3,
         "base_model": config["model"]["base_model"],
         "train_sha256": sha256_file(train_path),
         "max_length_cap": preprocessing_cfg.get("max_length_cap"),
@@ -111,13 +123,200 @@ def write_json(path: str, value: Any) -> None:
         json.dump(value, f, ensure_ascii=False, indent=2)
 
 
-def build_chat_text(question: str, answer: str | None = None, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> str:
-    parts = [f"<|im_start|>system\n{system_prompt}<|im_end|>", f"<|im_start|>user\n{question}<|im_end|>"]
-    if answer is None:
-        parts.append("<|im_start|>assistant\n")
-    else:
-        parts.append(f"<|im_start|>assistant\n{answer}<|im_end|>")
-    return "\n".join(parts)
+def get_system_prompt(config: dict[str, Any] | None = None) -> str:
+    if not config:
+        return DEFAULT_SYSTEM_PROMPT
+
+    return config.get("model", {}).get("system_prompt", DEFAULT_SYSTEM_PROMPT)
+
+
+def normalize_message_role(value: Any) -> str:
+    role = str(value or "").strip().lower()
+    if not role:
+        raise ValueError("Mesaj rol bilgisi bos.")
+
+    normalized = MESSAGE_ROLE_ALIASES.get(role)
+    if not normalized or normalized not in ALLOWED_MESSAGE_ROLES:
+        raise ValueError(f"Desteklenmeyen mesaj rolu: {value}")
+    return normalized
+
+
+def normalize_message(message: dict[str, Any]) -> dict[str, str]:
+    if not isinstance(message, dict):
+        raise ValueError("Her mesaj dict olmalidir.")
+
+    role = normalize_message_role(message.get("role", message.get("type")))
+    content = message.get("content", message.get("response", message.get("text", "")))
+    content = str(content or "").strip()
+    if not content:
+        raise ValueError("Mesaj icerigi bos olamaz.")
+
+    return {
+        "role": role,
+        "content": content,
+    }
+
+
+def normalize_messages(
+    messages: list[dict[str, Any]],
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    inject_system: bool = True,
+    require_assistant: bool = False,
+    require_final_assistant: bool = False,
+) -> list[dict[str, str]]:
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("messages alani bos veya gecersiz.")
+
+    normalized = [normalize_message(message) for message in messages]
+    has_system_message = any(message["role"] == "system" for message in normalized)
+
+    if inject_system and not has_system_message:
+        normalized = [{"role": "system", "content": system_prompt}] + normalized
+
+    if require_assistant and not any(message["role"] == "assistant" for message in normalized):
+        raise ValueError("Egitim orneginde en az bir assistant mesaji olmalidir.")
+
+    if require_final_assistant and normalized[-1]["role"] != "assistant":
+        raise ValueError("Egitim ornegi assistant mesaji ile bitmelidir.")
+
+    return normalized
+
+
+def build_single_turn_messages(
+    question: str,
+    answer: str | None = None,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+) -> list[dict[str, str]]:
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": str(question).strip()},
+    ]
+    if answer is not None:
+        messages.append({"role": "assistant", "content": str(answer).strip()})
+    return messages
+
+
+def build_fallback_chat_text(messages: list[dict[str, str]], add_generation_prompt: bool = False) -> str:
+    rendered_parts = []
+    for message in messages:
+        rendered_parts.append(f"<|im_start|>{message['role']}\n{message['content']}<|im_end|>")
+
+    if add_generation_prompt:
+        rendered_parts.append("<|im_start|>assistant\n")
+
+    return "\n".join(rendered_parts)
+
+
+def render_messages(
+    messages: list[dict[str, Any]],
+    tokenizer: Any | None = None,
+    tokenizer_source: str | None = None,
+    add_generation_prompt: bool = False,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+) -> str:
+    normalized = normalize_messages(messages, system_prompt=system_prompt)
+
+    if tokenizer is None and tokenizer_source:
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(resolve_model_reference(tokenizer_source))
+
+    if tokenizer is not None and getattr(tokenizer, "chat_template", None):
+        return tokenizer.apply_chat_template(
+            normalized,
+            tokenize=False,
+            add_generation_prompt=add_generation_prompt,
+        )
+
+    return build_fallback_chat_text(normalized, add_generation_prompt=add_generation_prompt)
+
+
+def render_token_ids(
+    messages: list[dict[str, Any]],
+    tokenizer: Any,
+    add_generation_prompt: bool = False,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+) -> list[int]:
+    normalized = normalize_messages(messages, system_prompt=system_prompt)
+
+    if getattr(tokenizer, "chat_template", None):
+        return list(
+            tokenizer.apply_chat_template(
+                normalized,
+                tokenize=True,
+                add_generation_prompt=add_generation_prompt,
+            )
+        )
+
+    rendered_text = build_fallback_chat_text(normalized, add_generation_prompt=add_generation_prompt)
+    return list(tokenizer(rendered_text, add_special_tokens=False)["input_ids"])
+
+
+def tokenize_messages_for_training(
+    messages: list[dict[str, Any]],
+    tokenizer: Any,
+    eos_token_id: int | None = None,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+) -> dict[str, Any]:
+    normalized = normalize_messages(
+        messages,
+        system_prompt=system_prompt,
+        require_assistant=True,
+        require_final_assistant=True,
+    )
+    input_ids = render_token_ids(normalized, tokenizer, add_generation_prompt=False, system_prompt=system_prompt)
+    labels = [-100] * len(input_ids)
+
+    for index, message in enumerate(normalized):
+        if message["role"] != "assistant":
+            continue
+
+        prompt_ids = render_token_ids(
+            normalized[:index],
+            tokenizer,
+            add_generation_prompt=True,
+            system_prompt=system_prompt,
+        )
+        full_turn_ids = render_token_ids(
+            normalized[: index + 1],
+            tokenizer,
+            add_generation_prompt=False,
+            system_prompt=system_prompt,
+        )
+
+        if len(full_turn_ids) <= len(prompt_ids) or full_turn_ids[: len(prompt_ids)] != prompt_ids:
+            raise ValueError("Assistant token mask hesaplanamadi.")
+
+        for position in range(len(prompt_ids), len(full_turn_ids)):
+            labels[position] = full_turn_ids[position]
+
+    if eos_token_id is not None and (not input_ids or input_ids[-1] != eos_token_id):
+        input_ids.append(eos_token_id)
+        labels.append(eos_token_id)
+
+    return {
+        "messages": normalized,
+        "input_ids": input_ids,
+        "labels": labels,
+        "length": len(input_ids),
+    }
+
+
+def build_chat_text(
+    question: str,
+    answer: str | None = None,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    tokenizer: Any | None = None,
+    tokenizer_source: str | None = None,
+) -> str:
+    messages = build_single_turn_messages(question, answer, system_prompt=system_prompt)
+    return render_messages(
+        messages,
+        tokenizer=tokenizer,
+        tokenizer_source=tokenizer_source,
+        add_generation_prompt=answer is None,
+        system_prompt=system_prompt,
+    )
 
 
 def detect_runtime() -> dict[str, Any]:
