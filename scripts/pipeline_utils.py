@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -104,6 +105,71 @@ def write_json(path: str, value: Any) -> None:
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(value, f, ensure_ascii=False, indent=2)
+
+
+def detect_runtime() -> dict[str, Any]:
+    import torch
+
+    try:
+        import torch_xla.core.xla_model as xm  # noqa: F401
+
+        return {
+            "name": "tpu",
+            "dtype": torch.bfloat16,
+            "is_tpu": True,
+            "is_cuda": False,
+            "is_cpu": False,
+        }
+    except ImportError:
+        pass
+
+    if torch.cuda.is_available():
+        return {
+            "name": "cuda",
+            "dtype": torch.float16,
+            "is_tpu": False,
+            "is_cuda": True,
+            "is_cpu": False,
+        }
+
+    return {
+        "name": "cpu",
+        "dtype": torch.float32,
+        "is_tpu": False,
+        "is_cuda": False,
+        "is_cpu": True,
+    }
+
+
+def call_with_dtype_fallback(loader: Any, *args: Any, **kwargs: Any) -> Any:
+    try:
+        return loader(*args, **kwargs)
+    except TypeError as exc:
+        if "dtype" not in kwargs or "unexpected keyword argument" not in str(exc):
+            raise
+
+        fallback_kwargs = dict(kwargs)
+        fallback_kwargs["torch_dtype"] = fallback_kwargs.pop("dtype")
+        print("Not: Bu transformers surumu `dtype` yerine `torch_dtype` bekliyor. Geri uyum modu kullaniliyor.")
+        return loader(*args, **fallback_kwargs)
+
+
+def build_compatible_init_kwargs(factory: Any, raw_kwargs: dict[str, Any], label: str) -> dict[str, Any]:
+    supported_args = inspect.signature(factory).parameters
+    compatible_kwargs = {}
+    skipped_args = []
+
+    for key, value in raw_kwargs.items():
+        if key in supported_args:
+            compatible_kwargs[key] = value
+        else:
+            skipped_args.append(key)
+
+    if skipped_args:
+        skipped_list = ", ".join(sorted(skipped_args))
+        print(f"Not: Bu ortamda desteklenmeyen {label} argumanlari atlandi: {skipped_list}")
+
+    return compatible_kwargs
 
 
 def compute_context_window(lengths: list[int], max_length_cap: int | None = None) -> int:

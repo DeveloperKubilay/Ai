@@ -3,8 +3,11 @@ import shutil
 
 from pipeline_utils import (
     build_training_profile,
+    build_compatible_init_kwargs,
+    call_with_dtype_fallback,
     compute_logging_steps,
     compute_save_steps,
+    detect_runtime,
     find_latest_checkpoint,
     get_checkpoint_dir,
     get_prepared_paths,
@@ -17,7 +20,6 @@ from pipeline_utils import (
     write_json,
 )
 
-import torch
 from datasets import load_from_disk
 from peft import LoraConfig, PeftModel, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
@@ -55,8 +57,10 @@ else:
 profile = build_training_profile(sample_count, token_lengths, training_cfg, preprocessing_cfg)
 avg_tokens = sum(token_lengths) / sample_count
 steps_per_epoch = optimizer_steps_per_epoch(sample_count, profile["batch_size"], profile["grad_accum"])
+total_train_steps = steps_per_epoch * profile["epochs"]
 save_steps = compute_save_steps(steps_per_epoch, checkpoint_cfg)
 logging_steps = compute_logging_steps(steps_per_epoch)
+warmup_steps = max(1, int(total_train_steps * 0.1)) if total_train_steps > 0 else 0
 
 tokenizer_source = resolve_model_reference(config["model"].get("tokenizer_source", config["model"]["base_model"]))
 tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
@@ -86,27 +90,31 @@ checkpoint_dir = get_checkpoint_dir(config, prepared_paths["run_key"])
 os.makedirs(checkpoint_dir, exist_ok=True)
 latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
 
-try:
-    import torch_xla
-    IS_TPU = True
+runtime = detect_runtime()
+runtime_name = runtime["name"]
+runtime_dtype = runtime["dtype"]
+is_tpu = runtime["is_tpu"]
+is_cuda = runtime["is_cuda"]
+
+if is_tpu:
     print("TPU destegi algilandi! (bfloat16 kullanilacak)")
-except ImportError:
-    IS_TPU = False
-    print("Standart GPU/CPU modu algilandi! (float16 kullanilacak)")
+elif is_cuda:
+    print("CUDA/GPU modu algilandi! (float16 kullanilacak)")
+else:
+    print("CPU modu algilandi! (float32 kullanilacak)")
 
 model_kwargs = {
     "trust_remote_code": True,
+    "dtype": runtime_dtype,
 }
 
-if IS_TPU:
-    model_kwargs["torch_dtype"] = torch.bfloat16
-else:
+if is_cuda:
     model_kwargs["device_map"] = "auto"
-    model_kwargs["torch_dtype"] = torch.float16
 
-model = AutoModelForCausalLM.from_pretrained(
+model = call_with_dtype_fallback(
+    AutoModelForCausalLM.from_pretrained,
     resolve_model_reference(config["model"]["base_model"]),
-    **model_kwargs
+    **model_kwargs,
 )
 model.config.use_cache = False
 
@@ -125,28 +133,44 @@ else:
     model = get_peft_model(model, lora_config)
     print("Yeni LoRA egitimi baslatiliyor")
 
-args = SFTConfig(
-    output_dir=checkpoint_dir,
-    per_device_train_batch_size=profile["batch_size"],
-    gradient_accumulation_steps=profile["grad_accum"],
-    learning_rate=profile["learning_rate"],
-    num_train_epochs=profile["epochs"],
-    fp16=not IS_TPU,
-    bf16=IS_TPU,
-    logging_steps=logging_steps,
-    save_strategy="steps",
-    save_steps=save_steps,
-    save_total_limit=int(checkpoint_cfg.get("save_total_limit", 2)),
-    save_safetensors=True,
-    warmup_ratio=0.1,
-    optim="adamw_torch",
-    report_to="none",
-    seed=seed,
-    group_by_length=True,
-    max_length=profile["context_window"],
-    shuffle_dataset=True,
-    packing=False,
+sft_config_kwargs = build_compatible_init_kwargs(
+    SFTConfig.__init__,
+    {
+        "output_dir": checkpoint_dir,
+        "per_device_train_batch_size": profile["batch_size"],
+        "gradient_accumulation_steps": profile["grad_accum"],
+        "learning_rate": profile["learning_rate"],
+        "num_train_epochs": profile["epochs"],
+        "fp16": is_cuda,
+        "bf16": is_tpu,
+        "logging_steps": logging_steps,
+        "save_strategy": "steps",
+        "save_steps": save_steps,
+        "save_total_limit": int(checkpoint_cfg.get("save_total_limit", 2)),
+        "save_safetensors": True,
+        "warmup_steps": warmup_steps,
+        "optim": "adamw_torch",
+        "report_to": "none",
+        "seed": seed,
+        "group_by_length": True,
+        "max_length": profile["context_window"],
+        "shuffle_dataset": True,
+        "packing": False,
+        "gradient_checkpointing": not is_tpu,
+        "dataloader_pin_memory": is_cuda,
+    },
+    label="SFTConfig",
 )
+
+args = SFTConfig(
+    **sft_config_kwargs
+)
+
+if is_tpu and hasattr(args, "gradient_checkpointing"):
+    args.gradient_checkpointing = False
+
+if is_tpu and hasattr(model, "gradient_checkpointing_disable"):
+    model.gradient_checkpointing_disable()
 
 print(
     "Checkpoint: "
