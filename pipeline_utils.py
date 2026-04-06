@@ -92,6 +92,16 @@ def optimizer_steps_per_epoch(sample_count: int, batch_size: int, grad_accum: in
     return max(1, math.ceil(micro_batches / grad_accum))
 
 
+def compute_adaptive_min_epochs(sample_count: int, configured_min_epochs: int) -> int:
+    if sample_count >= 10000:
+        return 1
+    if sample_count >= 1024:
+        return min(configured_min_epochs, 2)
+    if sample_count >= 128:
+        return min(configured_min_epochs, 3)
+    return configured_min_epochs
+
+
 def build_training_profile(sample_count: int, token_lengths: list[int], training_cfg: dict[str, Any], preprocessing_cfg: dict[str, Any]) -> dict[str, Any]:
     auto_cfg = training_cfg.get("auto", {})
     auto_enabled = auto_cfg.get("enabled", True)
@@ -120,7 +130,8 @@ def build_training_profile(sample_count: int, token_lengths: list[int], training
         return profile
 
     reference_examples = max(1, int(auto_cfg.get("reference_examples", 48)))
-    min_epochs = max(1, int(auto_cfg.get("min_epochs", 4)))
+    configured_min_epochs = max(1, int(auto_cfg.get("min_epochs", 4)))
+    min_epochs = compute_adaptive_min_epochs(sample_count, configured_min_epochs)
     max_epochs = max(min_epochs, int(auto_cfg.get("max_epochs", max(base_epochs * 2, 60))))
 
     if sample_count < 32:
