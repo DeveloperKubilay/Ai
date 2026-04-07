@@ -39,7 +39,7 @@ set_seed(seed)
 prepared_paths = get_prepared_paths(config, train_path=project_path("data", "train.jsonl"))
 manifest = read_json(prepared_paths["manifest_path"])
 if manifest is None or not manifest.get("complete") or not os.path.exists(prepared_paths["dataset_dir"]):
-    raise SystemExit("Hazir token dataset bulunamadi. Once: python scripts/tokenize.py")
+    raise SystemExit("Hazir token dataset bulunamadi. Once: python scripts/veri_hazirla.py")
 
 print("=" * 60)
 print("FINE-TUNING BASLIYOR")

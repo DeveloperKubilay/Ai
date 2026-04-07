@@ -28,7 +28,7 @@ def main() -> None:
     repair_path = PROJECT_ROOT / "data" / "repair_train.jsonl"
 
     run_step(["scripts/create_data.py"])
-    run_step(["scripts/tokenize.py"])
+    run_step(["scripts/veri_hazirla.py"])
     run_step(["scripts/egit.py"])
     run_step(["scripts/test_et.py"])
 
@@ -38,7 +38,7 @@ def main() -> None:
     run_step(["scripts/duzeltici.py", "--apply"])
     if file_has_content(repair_path):
         print("\n>>> Repair bulundu, retrain dongusu baslatiliyor")
-        run_step(["scripts/tokenize.py"])
+        run_step(["scripts/veri_hazirla.py"])
         run_step(["scripts/egit.py"])
         run_step(["scripts/test_et.py"])
 

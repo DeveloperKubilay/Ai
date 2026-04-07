@@ -8,7 +8,7 @@ Akış sırası şudur:
 
 1. `data/input.jsonl` içinden kaynaklar okunur.
 2. `scripts/create_data.py` eğitim verisini `data/train.jsonl` içine yazar.
-3. `scripts/tokenize.py` bunu tokenize edip `prepared-datasets/` altına hazırlar.
+3. `scripts/veri_hazirla.py` bunu tokenize edip `prepared-datasets/` altına hazırlar.
 4. `scripts/egit.py` modeli eğitir ve `checkpoints/` altında ara kayıtlar tutar.
 5. `scripts/test_et.py` hızlı smoke test yapar.
 6. `scripts/duzeltici.py` modeli zorlayıp hata bulursa `data/repair_train.jsonl` üretir.
@@ -33,7 +33,7 @@ python scripts/create_data.py
 ### 3. Token dataset hazırla
 
 ```bash
-python scripts/tokenize.py
+python scripts/veri_hazirla.py
 ```
 
 ### 4. Eğit
@@ -107,7 +107,7 @@ Yani bugün repo olduğu haliyle "genel AI + her konuda doğal cevap" değil, "t
 ### scripts/
 
 - `scripts/create_data.py`: `input.jsonl` içindeki kaynaklardan `train.jsonl` üretir.
-- `scripts/tokenize.py`: `train.jsonl` verisini tokenize eder ve hazır dataset yazar.
+- `scripts/veri_hazirla.py`: `train.jsonl` verisini tokenize eder ve hazır dataset yazar.
 - `scripts/egit.py`: Eğitimi başlatır, checkpoint yönetir ve final adapter'ı kaydeder.
 - `scripts/test_et.py`: Soruları tek tek ve ayrı ayrı soran hızlı test scriptidir. Mesaj geçmişi taşımaz.
 - `scripts/duzeltici.py`: Modeli zorlar, rapor çıkarır, gerekiyorsa repair set üretir.

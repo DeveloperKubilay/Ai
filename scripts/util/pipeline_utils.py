@@ -11,7 +11,7 @@ os.environ.setdefault("USE_TF", "0")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
 DEFAULT_SYSTEM_PROMPT = (
     "Sen kisa, dogal, yardimci ve durust Turkce cevaplar veren bir asistansin. "
     "Emin olmadiginda bunu acikca soyle ve uydurma bilgi verme."

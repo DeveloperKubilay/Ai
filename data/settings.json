@@ -15,62 +15,8 @@
     "lora_alpha": 32,
     "seed": 42,
     "auto": {
-      "enabled": true,
-      "reference_examples": 48,
-      "min_epochs": 4,
-      "max_epochs": 60,
-      "max_batch_size": {
-        "cpu": 1,
-        "cuda": 8,
-        "tpu": 32
-      },
-      "device_batch_tokens": {
-        "cpu": 1024,
-        "cuda": 4096,
-        "tpu": 16384
-      },
-      "effective_step_tokens": {
-        "cpu": 1024,
-        "cuda": 16384,
-        "tpu": 65536
-      },
-      "max_grad_accum": {
-        "cpu": 4,
-        "cuda": 8,
-        "tpu": 16
-      },
-      "pad_to_multiple_of": {
-        "cpu": 8,
-        "cuda": 8,
-        "tpu": 32
-      }
+      "enabled": true
     }
-  },
-  "preprocessing": {
-    "prepared_root": "./prepared-datasets",
-    "chunk_size": 64,
-    "max_length_cap": 2048
-  },
-  "checkpointing": {
-    "root_dir": "./checkpoints",
-    "save_steps": 500,
-    "min_save_steps": 1,
-    "short_run_target_saves": 2,
-    "save_total_limit": 2,
-    "cleanup_after_success": false
-  },
-  "evaluation": {
-    "enabled": true,
-    "ratio": 0.125,
-    "min_examples": 2,
-    "min_train_examples": 8,
-    "patience": 2,
-    "threshold": 0.0
-  },
-  "inference": {
-    "max_new_tokens": 96,
-    "do_sample": false,
-    "repetition_penalty": 1.1
   },
   "teacher": {
     "url": "http://localhost:11434/api/generate",
@@ -78,19 +24,9 @@
     "temperature": 0.8
   },
   "verification": {
-    "enabled": false,
-    "strict": false,
-    "model": "",
-    "temperature": 0.2,
-    "max_attempts": 2
+    "enabled": false
   },
   "redteam": {
-    "question_count": 8,
-    "temperature": 0.5,
-    "max_attempts": 2,
-    "verify_temperature": 0.2,
-    "verify_attempts": 2,
-    "apply_repairs": true,
-    "refusal_answer": "Bu konuda yeterli ve guvenilir bilgiye sahip degilim."
+    "apply_repairs": true
   }
 }
