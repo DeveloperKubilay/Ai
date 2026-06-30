@@ -1,5 +1,7 @@
 # Otomatik Fine-Tuning Sistemi
 
+![](image.png)
+
 Bu repo mesaj tabanlı veri üretimi, token hazırlama, LoRA fine-tuning, hızlı test ve red-team repair akışını tek yerde toplar.
 
 ## Kısa Mantık
